@@ -192,7 +192,7 @@ class TestJsocrConfigViews(TransactionCase):
             config_as_manager.write({'ollama_model': 'llama3'})
 
     # -------------------------------------------------------------------------
-    # AC4: Valeurs par défaut visibles
+    # AC4: Valeurs par defaut visibles
     # -------------------------------------------------------------------------
 
     def test_default_ollama_url(self):

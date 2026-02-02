@@ -26,7 +26,7 @@ class JsocrConfig(models.Model):
         copy=False,
     )
 
-    # URL et modèle Ollama
+    # URL et modele Ollama
     ollama_url = fields.Char(
         string='Ollama URL',
         default='http://localhost:11434',
@@ -38,13 +38,13 @@ class JsocrConfig(models.Model):
         selection='_get_ollama_models',
         string='Ollama Model',
         default='llama3',
-        help='Nom du modèle IA à utiliser (ex: llama3, mistral)'
+        help='Nom du modele IA à utiliser (ex: llama3, mistral)'
     )
 
     ollama_timeout = fields.Integer(
         string='Ollama Timeout',
         default=120,
-        help='Timeout en secondes pour les requêtes Ollama (default: 120s)'
+        help='Timeout en secondes pour les requetes Ollama (default: 120s)'
     )
 
     # Chemins des dossiers de traitement
@@ -59,7 +59,7 @@ class JsocrConfig(models.Model):
         string='Success Folder',
         default='/opt/odoo/ocr_success',
         required=True,
-        help='Chemin du dossier pour fichiers traités avec succès'
+        help='Chemin du dossier pour fichiers traites avec succes'
     )
 
     error_folder_path = fields.Char(
@@ -80,7 +80,7 @@ class JsocrConfig(models.Model):
     alert_amount_threshold = fields.Float(
         string='Alert Amount Threshold',
         default=10000.0,
-        help='Seuil d'alerte pour montants élevés (en CHF)'
+        help='Seuil d\'alerte pour montants eleves (en CHF)'
     )
 
     alert_email = fields.Char(
@@ -133,8 +133,8 @@ class JsocrConfig(models.Model):
         """Validate folder paths are absolute with existing, accessible parents"""
         for record in self:
             folder_fields = {
-                'watch_folder_path': 'Dossier surveillé',
-                'success_folder_path': 'Dossier succès',
+                'watch_folder_path': 'Dossier surveille',
+                'success_folder_path': 'Dossier succes',
                 'error_folder_path': 'Dossier erreur',
                 'rejected_folder_path': 'Dossier rejeté',
             }
@@ -163,7 +163,7 @@ class JsocrConfig(models.Model):
                 parent = path.parent
                 if not parent.exists():
                     raise ValidationError(
-                        f"{field_label}: Le répertoire parent n'existe pas. "
+                        f"{field_label}: Le repertoire parent n'existe pas. "
                         f"Parent attendu: {parent}"
                     )
 
@@ -177,7 +177,7 @@ class JsocrConfig(models.Model):
     @api.model
     @tools.ormcache()
     def get_config(self):
-        """Retourne l'enregistrement de configuration unique (le crée si nécessaire)
+        """Retourne l'enregistrement de configuration unique (le cree si nécessaire)
 
         Uses sudo() to ensure creation works even for users without create rights.
         Result is cached via @tools.ormcache for performance.
@@ -197,20 +197,20 @@ class JsocrConfig(models.Model):
         return super().write(vals)
 
     def _get_ollama_models(self):
-        """Retourne la liste des modèles disponibles pour le champ Selection.
+        """Retourne la liste des modeles disponibles pour le champ Selection.
 
-        Cette méthode peut être appelée par Odoo même si self est vide ou non initialisé.
-        Elle récupère automatiquement le config singleton si nécessaire.
+        Cette méthode peut être appelée par Odoo meme si self est vide ou non initialise.
+        Elle recupere automatiquement le config singleton si nécessaire.
 
         Called automatically by Odoo when rendering the Selection field.
         Fetches available models from Ollama API and formats them for the dropdown.
 
         Returns:
             list: Liste de tuples (value, label) pour le champ Selection.
-                  Retourne au moins le modèle par défaut si aucun modèle disponible.
+                  Retourne au moins le modele par défaut si aucun modele disponible.
         """
         # Récupérer le config singleton pour avoir accès à ollama_url
-        # Ceci fonctionne même si self est vide ou pas encore créé
+        # Ceci fonctionne meme si self est vide ou pas encore cree
         if self:
             config = self
         else:
@@ -220,22 +220,22 @@ class JsocrConfig(models.Model):
                 # Aucun config n'existe encore, retourner le défaut
                 return [('llama3', 'llama3 (défaut)')]
 
-        # Récupérer les modèles disponibles
+        # Récupérer les modeles disponibles
         models = config._fetch_available_models()
         if not models:
-            # Fallback: retourner au moins le modèle par défaut
+            # Fallback: retourner au moins le modele par défaut
             return [('llama3', 'llama3 (défaut)')]
 
         return [(model, model) for model in models]
 
     def _fetch_available_models(self):
-        """Récupère les modèles disponibles depuis Ollama API.
+        """Récupère les modeles disponibles depuis Ollama API.
 
         Calls GET /api/tags endpoint silently (no user errors raised).
         Used to populate the Selection field dropdown.
 
         Returns:
-            list: Liste des noms de modèles, ou liste vide si erreur
+            list: Liste des noms de modeles, ou liste vide si erreur
         """
         if not self.ollama_url:
             return []
@@ -297,7 +297,7 @@ class JsocrConfig(models.Model):
                 if models:
                     message = f"Connexion OK - Modèles disponibles: {', '.join(models)}"
                 else:
-                    message = "Connexion OK - Aucun modèle disponible"
+                    message = "Connexion OK - Aucun modele disponible"
 
                 _logger.info(f"JSOCR: Ollama connection successful - {len(models)} model(s) found")
 

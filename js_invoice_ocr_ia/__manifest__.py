@@ -17,13 +17,13 @@ Features
 * Surveillance dossier pour nouveaux PDFs
 * Extraction texte via PyMuPDF et Tesseract
 * Analyse IA via Ollama local
-* Création automatique de factures brouillon
+* Creation automatique de factures brouillon
 * Indices de confiance par champ
 * Apprentissage des corrections utilisateur
 
 Multilingue
 -----------
-Support natif français, allemand et anglais (contexte suisse).
+Support natif francais, allemand et anglais (contexte suisse).
     """,
     'author': 'Joel Scheuner',
     'website': '',

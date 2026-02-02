@@ -28,14 +28,14 @@ class TestJsocrConfigFolderValidation(TransactionCase):
         super().setUpClass()
         cls.Config = cls.env['jsocr.config']
 
-        # Nettoyer les configs existantes pour tests isolés
+        # Nettoyer les configs existantes pour tests isoles
         cls.Config.search([]).unlink()
         cls.env.registry.clear_cache()
 
-        # Créer un dossier temporaire pour les tests
+        # Creer un dossier temporaire pour les tests
         cls.temp_dir = tempfile.mkdtemp()
 
-        # Créer des sous-dossiers de test dans le dossier temporaire
+        # Creer des sous-dossiers de test dans le dossier temporaire
         cls.valid_watch_path = os.path.join(cls.temp_dir, 'watch')
         cls.valid_success_path = os.path.join(cls.temp_dir, 'success')
         cls.valid_error_path = os.path.join(cls.temp_dir, 'error')
@@ -44,7 +44,7 @@ class TestJsocrConfigFolderValidation(TransactionCase):
     def setUp(self):
         """Clean up before each test."""
         super().setUp()
-        # Note: setUpClass nettoie déjà, mais certains tests créent des configs
+        # Note: setUpClass nettoie deja, mais certains tests creent des configs
         # Le cleanup ici garantit l'isolation entre tests
 
     # -------------------------------------------------------------------------
@@ -52,19 +52,19 @@ class TestJsocrConfigFolderValidation(TransactionCase):
     # -------------------------------------------------------------------------
 
     def test_valid_absolute_paths_accepted(self):
-        """Test: Chemins absolus valides avec parent existant sont acceptés"""
-        # Le dossier temporaire existe, donc on peut créer des chemins qui pointent vers lui
+        """Test: Chemins absolus valides avec parent existant sont acceptes"""
+        # Le dossier temporaire existe, donc on peut creer des chemins qui pointent vers lui
         config = self.Config.create({
             'watch_folder_path': self.valid_watch_path,
             'success_folder_path': self.valid_success_path,
             'error_folder_path': self.valid_error_path,
             'rejected_folder_path': self.valid_rejected_path,
         })
-        self.assertTrue(config.id, "Config avec chemins absolus valides devrait être créé")
+        self.assertTrue(config.id, "Config avec chemins absolus valides devrait etre cree")
         self.assertEqual(config.watch_folder_path, self.valid_watch_path)
 
     def test_relative_path_rejected(self):
-        """Test: Chemin relatif est rejeté avec message approprié"""
+        """Test: Chemin relatif est rejete avec message approprie"""
         with self.assertRaises(ValidationError) as cm:
             self.Config.create({
                 'watch_folder_path': 'relative/path',
@@ -72,12 +72,12 @@ class TestJsocrConfigFolderValidation(TransactionCase):
         error_message = str(cm.exception)
         self.assertIn('absolu', error_message.lower(),
                      "Message d'erreur devrait mentionner 'absolu'")
-        self.assertIn('Dossier surveillé', error_message,
-                     "Message d'erreur devrait mentionner le champ concerné")
+        self.assertIn('Dossier surveille', error_message,
+                     "Message d'erreur devrait mentionner le champ concerne")
 
     def test_nonexistent_parent_rejected(self):
-        """Test: Chemin avec parent inexistant est rejeté"""
-        # Créer un chemin absolu mais avec parent inexistant
+        """Test: Chemin avec parent inexistant est rejete"""
+        # Creer un chemin absolu mais avec parent inexistant
         nonexistent_path = '/nonexistent_parent_JSOCR_TEST_12345/subfolder'
 
         with self.assertRaises(ValidationError) as cm:
@@ -89,7 +89,7 @@ class TestJsocrConfigFolderValidation(TransactionCase):
                      "Message d'erreur devrait mentionner 'parent'")
 
     def test_all_folder_fields_validated(self):
-        """Test: Tous les champs de dossiers sont validés"""
+        """Test: Tous les champs de dossiers sont valides"""
         # Test chaque champ individuellement avec un chemin relatif
         folder_fields = [
             'watch_folder_path',
@@ -104,23 +104,23 @@ class TestJsocrConfigFolderValidation(TransactionCase):
                 self.Config.search([]).unlink()
                 self.env.registry.clear_cache()
 
-                # Créer config avec un champ invalide
+                # Creer config avec un champ invalide
                 self.Config.create({
                     field_name: 'relative/path',
                 })
 
     def test_insufficient_permissions_rejected(self):
-        """Test: Dossier parent sans permissions R/W est rejeté (AC1 ligne 19)"""
-        # Note: Ce test est difficile à implémenter de manière portable car:
-        # 1. Créer un dossier read-only nécessite des permissions root/admin
+        """Test: Dossier parent sans permissions R/W est rejete (AC1 ligne 19)"""
+        # Note: Ce test est difficile a implementer de maniere portable car:
+        # 1. Creer un dossier read-only necessite des permissions root/admin
         # 2. Le comportement varie selon l'OS (Unix vs Windows)
-        # 3. Les tests Odoo tournent souvent avec des privilèges élevés
+        # 3. Les tests Odoo tournent souvent avec des privileges eleves
         #
         # Solution: On teste la logique avec un mock ou on documente la limitation
-        # Pour ce test, on vérifie que le code TENTE de vérifier les permissions
+        # Pour ce test, on verifie que le code TENTE de verifier les permissions
 
-        # Sur Unix, /root est généralement inaccessible pour utilisateurs normaux
-        # Sur Windows, System Volume Information est protégé
+        # Sur Unix, /root est generalement inaccessible pour utilisateurs normaux
+        # Sur Windows, System Volume Information est protege
         if os.name == 'posix':  # Unix/Linux
             # Chercher un dossier qui existe mais n'est pas writable
             protected_paths = ['/root/test_ocr', '/sys/test_ocr']
@@ -133,10 +133,10 @@ class TestJsocrConfigFolderValidation(TransactionCase):
                         })
                     self.assertIn('permissions', str(cm.exception).lower(),
                                 "Message devrait mentionner les permissions")
-                    return  # Test réussi
+                    return  # Test reussi
 
-        # Si aucun dossier protégé n'est disponible, on skip le test
-        # (mieux que de faire échouer le test sur certains environnements)
+        # Si aucun dossier protege n'est disponible, on skip le test
+        # (mieux que de faire echouer le test sur certains environnements)
         self.skipTest("Aucun dossier avec permissions restreintes disponible pour ce test")
 
     # -------------------------------------------------------------------------
@@ -144,7 +144,7 @@ class TestJsocrConfigFolderValidation(TransactionCase):
     # -------------------------------------------------------------------------
 
     def test_valid_paths_persist_after_create(self):
-        """Test: Chemins valides persistent après création"""
+        """Test: Chemins valides persistent apres creation"""
         config = self.Config.create({
             'watch_folder_path': self.valid_watch_path,
         })
@@ -154,10 +154,10 @@ class TestJsocrConfigFolderValidation(TransactionCase):
         config_reloaded = self.Config.browse(config.id)
 
         self.assertEqual(config_reloaded.watch_folder_path, self.valid_watch_path,
-                        "Chemin devrait persister après création")
+                        "Chemin devrait persister apres creation")
 
     def test_valid_paths_persist_after_write(self):
-        """Test: Chemins valides persistent après modification"""
+        """Test: Chemins valides persistent apres modification"""
         config = self.Config.create({
             'watch_folder_path': self.valid_watch_path,
         })
@@ -171,31 +171,31 @@ class TestJsocrConfigFolderValidation(TransactionCase):
         config_reloaded = self.Config.browse(config.id)
 
         self.assertEqual(config_reloaded.watch_folder_path, new_path,
-                        "Nouveau chemin devrait persister après modification")
+                        "Nouveau chemin devrait persister apres modification")
 
     # -------------------------------------------------------------------------
     # AC3: Messages d'erreur explicites
     # -------------------------------------------------------------------------
 
     def test_error_message_includes_field_name(self):
-        """Test: Message d'erreur mentionne le champ concerné"""
+        """Test: Message d'erreur mentionne le champ concerne"""
         with self.assertRaises(ValidationError) as cm:
             self.Config.create({
                 'success_folder_path': 'relative/path',
             })
         error_message = str(cm.exception)
-        self.assertIn('Dossier succès', error_message,
-                     "Message devrait identifier le champ 'Dossier succès'")
+        self.assertIn('Dossier succes', error_message,
+                     "Message devrait identifier le champ 'Dossier succes'")
 
     def test_error_message_includes_reason(self):
-        """Test: Message d'erreur indique la raison de l'échec"""
+        """Test: Message d'erreur indique la raison de l'echec"""
         # Test pour chemin relatif
         with self.assertRaises(ValidationError) as cm:
             self.Config.create({
                 'watch_folder_path': 'relative/path',
             })
         self.assertIn('absolu', str(cm.exception).lower(),
-                     "Message devrait indiquer que le chemin doit être absolu")
+                     "Message devrait indiquer que le chemin doit etre absolu")
 
         # Test pour parent inexistant
         self.Config.search([]).unlink()
@@ -224,9 +224,9 @@ class TestJsocrConfigFolderValidation(TransactionCase):
     # -------------------------------------------------------------------------
 
     def test_empty_watch_folder_rejected(self):
-        """Test: Champ watch_folder_path vide est rejeté (required=True)"""
-        # Odoo lève différentes exceptions selon le contexte pour required=True
-        # Peut être UserError, MissingError, ou ValidationError
+        """Test: Champ watch_folder_path vide est rejete (required=True)"""
+        # Odoo leve differentes exceptions selon le contexte pour required=True
+        # Peut etre UserError, MissingError, ou ValidationError
         from odoo.exceptions import UserError, MissingError
         with self.assertRaises((ValidationError, UserError, MissingError)):
             self.Config.create({
@@ -234,7 +234,7 @@ class TestJsocrConfigFolderValidation(TransactionCase):
             })
 
     def test_empty_success_folder_rejected(self):
-        """Test: Champ success_folder_path vide est rejeté (required=True)"""
+        """Test: Champ success_folder_path vide est rejete (required=True)"""
         from odoo.exceptions import UserError, MissingError
         with self.assertRaises((ValidationError, UserError, MissingError)):
             self.Config.create({
@@ -258,7 +258,7 @@ class TestJsocrConfigFolderValidation(TransactionCase):
                 self.Config.search([]).unlink()
                 self.env.registry.clear_cache()
 
-                # Tenter de créer sans le champ requis
+                # Tenter de creer sans le champ requis
                 vals = {
                     'watch_folder_path': self.valid_watch_path,
                     'success_folder_path': self.valid_success_path,
@@ -269,29 +269,29 @@ class TestJsocrConfigFolderValidation(TransactionCase):
                 self.Config.create(vals)
 
     # -------------------------------------------------------------------------
-    # Tests supplémentaires de robustesse
+    # Tests supplementaires de robustesse
     # -------------------------------------------------------------------------
 
     def test_windows_absolute_path_format(self):
-        """Test: Format Windows (C:\\) est reconnu comme absolu et validé"""
+        """Test: Format Windows (C:\\) est reconnu comme absolu et valide"""
         windows_path = 'C:\\Windows\\Temp\\ocr_test'
         path = Path(windows_path)
 
-        # Test 1: Vérifier que Path reconnaît le format Windows comme absolu
+        # Test 1: Verifier que Path reconnait le format Windows comme absolu
         if os.name == 'nt':  # Sur Windows
             self.assertTrue(path.is_absolute(),
-                          "Chemin Windows devrait être reconnu comme absolu")
+                          "Chemin Windows devrait etre reconnu comme absolu")
 
-            # Test 2: Vérifier que la création de config fonctionne si parent existe
+            # Test 2: Verifier que la creation de config fonctionne si parent existe
             if path.parent.exists():
                 config = self.Config.create({
                     'watch_folder_path': windows_path,
                 })
                 self.assertEqual(config.watch_folder_path, windows_path,
-                               "Chemin Windows valide devrait être accepté")
+                               "Chemin Windows valide devrait etre accepte")
 
     def test_modification_from_invalid_to_valid(self):
-        """Test: Modification d'un chemin valide vers un invalide est bloquée"""
+        """Test: Modification d'un chemin valide vers un invalide est bloquee"""
         config = self.Config.create({
             'watch_folder_path': self.valid_watch_path,
         })
@@ -300,13 +300,13 @@ class TestJsocrConfigFolderValidation(TransactionCase):
         with self.assertRaises(ValidationError):
             config.write({'watch_folder_path': 'relative/invalid'})
 
-        # Vérifier que le chemin original est préservé
+        # Verifier que le chemin original est preserve
         config.invalidate_cache()
         self.assertEqual(config.watch_folder_path, self.valid_watch_path,
-                        "Chemin original devrait être préservé après échec de modification")
+                        "Chemin original devrait etre preserve apres echec de modification")
 
     def test_multiple_fields_with_mixed_validity(self):
-        """Test: Si un seul champ est invalide, toute la validation échoue"""
+        """Test: Si un seul champ est invalide, toute la validation echoue"""
         with self.assertRaises(ValidationError):
             self.Config.create({
                 'watch_folder_path': self.valid_watch_path,  # Valide

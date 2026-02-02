@@ -11,7 +11,7 @@ from js_invoice_ocr_ia.models.jsocr_config import JsocrConfig
 
 
 class TestJsocrConfig(TransactionCase):
-    """Tests pour le modèle jsocr.config (singleton de configuration)"""
+    """Tests pour le modele jsocr.config (singleton de configuration)"""
 
     def setUp(self):
         super().setUp()
@@ -22,7 +22,7 @@ class TestJsocrConfig(TransactionCase):
         self.env.registry.clear_cache()
 
     def test_create_config(self):
-        """Test: création basique d'un enregistrement config"""
+        """Test: creation basique d'un enregistrement config"""
         config = self.JsocrConfig.create({
             'ollama_url': 'http://test:11434',
         })
@@ -31,44 +31,44 @@ class TestJsocrConfig(TransactionCase):
         self.assertEqual(config.ollama_url, 'http://test:11434')
 
     def test_get_config_creates_if_missing(self):
-        """Test: get_config crée un enregistrement si aucun n'existe"""
+        """Test: get_config cree un enregistrement si aucun n'existe"""
         # S'assurer qu'aucun enregistrement n'existe
         self.assertEqual(self.JsocrConfig.search_count([]), 0)
 
-        # get_config doit créer un enregistrement
+        # get_config doit creer un enregistrement
         config = self.JsocrConfig.get_config()
 
         self.assertTrue(config)
         self.assertEqual(self.JsocrConfig.search_count([]), 1)
 
     def test_get_config_returns_existing(self):
-        """Test: get_config retourne l'enregistrement existant sans en créer un nouveau"""
-        # Créer un enregistrement
+        """Test: get_config retourne l'enregistrement existant sans en creer un nouveau"""
+        # Creer un enregistrement
         existing_config = self.JsocrConfig.create({'ollama_url': 'http://existing:11434'})
         # Clear cache to ensure fresh lookup
         self.env.registry.clear_cache()
 
-        # get_config doit retourner le même
+        # get_config doit retourner le meme
         config = self.JsocrConfig.get_config()
 
         self.assertEqual(config.id, existing_config.id)
         self.assertEqual(config.ollama_url, 'http://existing:11434')
-        # Vérifier qu'il n'y a toujours qu'un seul enregistrement
+        # Verifier qu'il n'y a toujours qu'un seul enregistrement
         self.assertEqual(self.JsocrConfig.search_count([]), 1)
 
     def test_singleton_constraint_prevents_duplicate(self):
-        """Test: contrainte SQL empêche la création de plusieurs enregistrements"""
-        # Créer le premier enregistrement
+        """Test: contrainte SQL empeche la creation de plusieurs enregistrements"""
+        # Creer le premier enregistrement
         self.JsocrConfig.create({'ollama_url': 'http://first:11434'})
 
-        # Tenter de créer un deuxième enregistrement devrait échouer
-        # car la contrainte unique(singleton_marker) l'empêche
+        # Tenter de creer un deuxieme enregistrement devrait echouer
+        # car la contrainte unique(singleton_marker) l'empeche
         with self.assertRaises(IntegrityError):
             with self.cr.savepoint():
                 self.JsocrConfig.create({'ollama_url': 'http://second:11434'})
 
     def test_default_values(self):
-        """Test: vérifier toutes les valeurs par défaut"""
+        """Test: verifier toutes les valeurs par defaut"""
         config = self.JsocrConfig.create({})
 
         self.assertEqual(config.ollama_url, 'http://localhost:11434')
@@ -83,7 +83,7 @@ class TestJsocrConfig(TransactionCase):
         self.assertEqual(config.singleton_marker, 'singleton')
 
     def test_ollama_timeout_field_exists(self):
-        """Test: champ ollama_timeout existe avec valeur par défaut 120"""
+        """Test: champ ollama_timeout existe avec valeur par defaut 120"""
         config = self.JsocrConfig.create({})
         self.assertEqual(config.ollama_timeout, 120)
 
@@ -95,7 +95,7 @@ class TestJsocrConfig(TransactionCase):
         """Test: tous les champs requis sont accessibles"""
         config = self.JsocrConfig.create({})
 
-        # Vérifier que tous les champs existent et sont accessibles
+        # Verifier que tous les champs existent et sont accessibles
         self.assertIsNotNone(config.ollama_url)
         self.assertIsNotNone(config.ollama_model)
         self.assertIsNotNone(config.ollama_timeout)
@@ -105,10 +105,10 @@ class TestJsocrConfig(TransactionCase):
         self.assertIsNotNone(config.rejected_folder_path)
         self.assertIsNotNone(config.alert_amount_threshold)
         self.assertIsNotNone(config.singleton_marker)
-        # alert_email peut être False/None (optionnel)
+        # alert_email peut etre False/None (optionnel)
 
     def test_all_fields_modifiable(self):
-        """Test: tous les champs peuvent être modifiés"""
+        """Test: tous les champs peuvent etre modifies"""
         config = self.JsocrConfig.create({})
 
         config.write({
@@ -134,14 +134,14 @@ class TestJsocrConfig(TransactionCase):
         self.assertEqual(config.alert_email, 'test@example.com')
 
     def test_invalid_ollama_url_raises_error(self):
-        """Test: URL Ollama invalide lève une ValidationError"""
+        """Test: URL Ollama invalide leve une ValidationError"""
         with self.assertRaises(ValidationError):
             self.JsocrConfig.create({
                 'ollama_url': 'not-a-valid-url',
             })
 
     def test_valid_ollama_urls(self):
-        """Test: différents formats d'URL valides sont acceptés"""
+        """Test: differents formats d'URL valides sont acceptes"""
         valid_urls = [
             'http://localhost:11434',
             'https://localhost:11434',
@@ -158,20 +158,20 @@ class TestJsocrConfig(TransactionCase):
             self.assertEqual(config.ollama_url, url)
 
     def test_invalid_email_raises_error(self):
-        """Test: email invalide lève une ValidationError"""
+        """Test: email invalide leve une ValidationError"""
         config = self.JsocrConfig.create({})
 
         with self.assertRaises(ValidationError):
             config.write({'alert_email': 'not-an-email'})
 
     def test_valid_email_accepted(self):
-        """Test: email valide est accepté"""
+        """Test: email valide est accepte"""
         config = self.JsocrConfig.create({})
         config.write({'alert_email': 'admin@example.com'})
         self.assertEqual(config.alert_email, 'admin@example.com')
 
     def test_empty_email_accepted(self):
-        """Test: email vide/null est accepté (champ optionnel)"""
+        """Test: email vide/null est accepte (champ optionnel)"""
         config = self.JsocrConfig.create({'alert_email': ''})
         self.assertFalse(config.alert_email)
 
@@ -185,7 +185,7 @@ class TestJsocrConfig(TransactionCase):
     @patch('js_invoice_ocr_ia.models.jsocr_config.requests.get')
     @patch('js_invoice_ocr_ia.models.jsocr_config._logger')
     def test_ollama_connection_success_with_models(self, mock_logger, mock_get):
-        """Test: connexion réussie retourne les modèles disponibles"""
+        """Test: connexion reussie retourne les modeles disponibles"""
         # Mock successful response
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -203,26 +203,26 @@ class TestJsocrConfig(TransactionCase):
 
         result = config.test_ollama_connection()
 
-        # Vérifier que la notification contient les modèles
+        # Verifier que la notification contient les modeles
         self.assertEqual(result['type'], 'ir.actions.client')
         self.assertEqual(result['tag'], 'display_notification')
         self.assertIn('llama3', result['params']['message'])
         self.assertIn('mistral', result['params']['message'])
         self.assertEqual(result['params']['type'], 'success')
 
-        # Vérifier que le timeout est de 10s
+        # Verifier que le timeout est de 10s
         mock_get.assert_called_once_with(
             'http://localhost:11434/api/tags',
             timeout=10
         )
 
-        # Vérifier que le logging a été appelé correctement
+        # Verifier que le logging a ete appele correctement
         mock_logger.info.assert_any_call("JSOCR: Testing Ollama connection")
         mock_logger.info.assert_any_call("JSOCR: Ollama connection successful - 2 model(s) found")
 
     @patch('js_invoice_ocr_ia.models.jsocr_config.requests.get')
     def test_ollama_connection_success_no_models(self, mock_get):
-        """Test: connexion réussie sans modèles affiche message approprié"""
+        """Test: connexion reussie sans modeles affiche message approprie"""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {'models': []}
@@ -234,13 +234,13 @@ class TestJsocrConfig(TransactionCase):
 
         result = config.test_ollama_connection()
 
-        self.assertIn('Aucun modèle disponible', result['params']['message'])
+        self.assertIn('Aucun modele disponible', result['params']['message'])
         self.assertEqual(result['params']['type'], 'success')
 
     @patch('js_invoice_ocr_ia.models.jsocr_config.requests.get')
     @patch('js_invoice_ocr_ia.models.jsocr_config._logger')
     def test_ollama_connection_timeout(self, mock_logger, mock_get):
-        """Test: timeout après 10s lève UserError avec message approprié"""
+        """Test: timeout apres 10s leve UserError avec message approprie"""
         mock_get.side_effect = requests.Timeout()
 
         config = self.JsocrConfig.create({
@@ -250,15 +250,15 @@ class TestJsocrConfig(TransactionCase):
         with self.assertRaises(UserError) as cm:
             config.test_ollama_connection()
 
-        self.assertIn('Timeout après 10s', str(cm.exception))
+        self.assertIn('Timeout apres 10s', str(cm.exception))
 
-        # Vérifier que le logging a été appelé
+        # Verifier que le logging a ete appele
         mock_logger.info.assert_called_once_with("JSOCR: Testing Ollama connection")
         mock_logger.warning.assert_called_once_with("JSOCR: Ollama connection timeout")
 
     @patch('js_invoice_ocr_ia.models.jsocr_config.requests.get')
     def test_ollama_connection_error(self, mock_get):
-        """Test: erreur de connexion lève UserError"""
+        """Test: erreur de connexion leve UserError"""
         mock_get.side_effect = requests.ConnectionError("Connection refused")
 
         config = self.JsocrConfig.create({
@@ -272,7 +272,7 @@ class TestJsocrConfig(TransactionCase):
 
     @patch('js_invoice_ocr_ia.models.jsocr_config.requests.get')
     def test_ollama_connection_http_error(self, mock_get):
-        """Test: HTTP != 200 lève UserError avec status code"""
+        """Test: HTTP != 200 leve UserError avec status code"""
         mock_response = MagicMock()
         mock_response.status_code = 503
         mock_get.return_value = mock_response
@@ -287,7 +287,7 @@ class TestJsocrConfig(TransactionCase):
         self.assertIn('HTTP 503', str(cm.exception))
 
     def test_ollama_connection_no_url(self):
-        """Test: URL vide lève UserError"""
+        """Test: URL vide leve UserError"""
         config = self.JsocrConfig.create({
             'ollama_url': False  # Empty
         })
@@ -295,11 +295,11 @@ class TestJsocrConfig(TransactionCase):
         with self.assertRaises(UserError) as cm:
             config.test_ollama_connection()
 
-        self.assertIn('URL Ollama n\'est pas configurée', str(cm.exception))
+        self.assertIn('URL Ollama n\'est pas configuree', str(cm.exception))
 
     @patch('js_invoice_ocr_ia.models.jsocr_config.requests.get')
     def test_ollama_connection_invalid_json(self, mock_get):
-        """Test: réponse JSON invalide gérée gracieusement"""
+        """Test: reponse JSON invalide geree gracieusement"""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.side_effect = ValueError("Invalid JSON")
@@ -315,15 +315,15 @@ class TestJsocrConfig(TransactionCase):
         self.assertIn('JSON invalide', str(cm.exception))
 
     def test_ollama_connection_ensure_one_violation(self):
-        """Test: ensure_one() lève ValueError sur recordset vide/multiple"""
+        """Test: ensure_one() leve ValueError sur recordset vide/multiple"""
         # Test avec recordset vide
         empty_recordset = self.JsocrConfig.browse([])
         with self.assertRaises(ValueError):
             empty_recordset.test_ollama_connection()
 
-        # Test avec recordset multiple (créer 2 configs nécessite contournement contrainte)
-        # On ne peut pas vraiment tester multiple records à cause de la contrainte singleton
-        # Mais on vérifie au moins le comportement avec empty recordset
+        # Test avec recordset multiple (creer 2 configs necessite contournement contrainte)
+        # On ne peut pas vraiment tester multiple records a cause de la contrainte singleton
+        # Mais on verifie au moins le comportement avec empty recordset
 
     @patch('odoo.models.Registry.clear_cache')
     def test_write_clears_cache(self, mock_clear_cache):
@@ -332,13 +332,13 @@ class TestJsocrConfig(TransactionCase):
             'ollama_url': 'http://localhost:11434'
         })
 
-        # Reset mock pour ignorer les appels précédents (create, etc.)
+        # Reset mock pour ignorer les appels precedents (create, etc.)
         mock_clear_cache.reset_mock()
 
         # Modifier la config
         config.write({'ollama_model': 'mistral'})
 
-        # Vérifier que clear_cache a été appelé
+        # Verifier que clear_cache a ete appele
         mock_clear_cache.assert_called()
 
     # -------------------------------------------------------------------------
@@ -435,7 +435,7 @@ class TestJsocrConfig(TransactionCase):
 
     @patch.object(JsocrConfig, '_fetch_available_models')
     def test_get_ollama_models_fallback(self, mock_fetch):
-        """Test: _get_ollama_models retourne défaut si liste vide"""
+        """Test: _get_ollama_models retourne defaut si liste vide"""
         mock_fetch.return_value = []
 
         config = self.JsocrConfig.create({})
@@ -444,13 +444,13 @@ class TestJsocrConfig(TransactionCase):
 
         self.assertEqual(len(selection), 1)
         self.assertEqual(selection[0][0], 'llama3')
-        self.assertIn('défaut', selection[0][1])
+        self.assertIn('defaut', selection[0][1])
 
     def test_ollama_model_field_is_selection(self):
         """Test: champ ollama_model est de type Selection"""
         config = self.JsocrConfig.create({})
 
-        # Vérifier que le champ existe et est modifiable
+        # Verifier que le champ existe et est modifiable
         config.write({'ollama_model': 'llama3'})
         self.assertEqual(config.ollama_model, 'llama3')
 
@@ -458,13 +458,13 @@ class TestJsocrConfig(TransactionCase):
         self.assertEqual(config.ollama_model, 'mistral')
 
     def test_ollama_model_default_value(self):
-        """Test: valeur par défaut 'llama3' est préservée"""
+        """Test: valeur par defaut 'llama3' est preservee"""
         config = self.JsocrConfig.create({})
 
         self.assertEqual(config.ollama_model, 'llama3')
 
     # -------------------------------------------------------------------------
-    # Tests supplémentaires Story 2.4 (Corrections post-review)
+    # Tests supplementaires Story 2.4 (Corrections post-review)
     # -------------------------------------------------------------------------
 
     @patch('js_invoice_ocr_ia.models.jsocr_config.requests.get')
@@ -486,7 +486,7 @@ class TestJsocrConfig(TransactionCase):
     @patch('js_invoice_ocr_ia.models.jsocr_config.requests.get')
     @patch('js_invoice_ocr_ia.models.jsocr_config._logger')
     def test_fetch_available_models_logs_success(self, mock_logger, mock_get):
-        """Test: _fetch_available_models log le nombre de modèles récupérés"""
+        """Test: _fetch_available_models log le nombre de modeles recuperes"""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -503,7 +503,7 @@ class TestJsocrConfig(TransactionCase):
 
         models = config._fetch_available_models()
 
-        # Vérifier le log de succès
+        # Verifier le log de succes
         mock_logger.info.assert_called_once_with("JSOCR: Retrieved 2 model(s) from Ollama")
 
     @patch('js_invoice_ocr_ia.models.jsocr_config.requests.get')
@@ -518,7 +518,7 @@ class TestJsocrConfig(TransactionCase):
 
         models = config._fetch_available_models()
 
-        # Vérifier le log d'erreur
+        # Verifier le log d'erreur
         mock_logger.warning.assert_called_once_with("JSOCR: Could not fetch models - ConnectionError")
 
     # ========================================
@@ -548,7 +548,7 @@ class TestJsocrConfig(TransactionCase):
         self.assertIn("seuil d'alerte", str(context.exception).lower())
 
     def test_alert_amount_threshold_rejects_negative(self):
-        """Test: alert_amount_threshold rejette valeurs négatives"""
+        """Test: alert_amount_threshold rejette valeurs negatives"""
         with self.assertRaises(ValidationError) as context:
             self.JsocrConfig.create({
                 'alert_amount_threshold': -100.0
@@ -589,7 +589,7 @@ class TestJsocrConfig(TransactionCase):
             config.write({'alert_email': '@nodomain.com'})
 
     def test_alert_email_accepts_empty_value(self):
-        """Test: alert_email peut être vide (optionnel)"""
+        """Test: alert_email peut etre vide (optionnel)"""
         config = self.JsocrConfig.create({
             'alert_email': False
         })
@@ -600,7 +600,7 @@ class TestJsocrConfig(TransactionCase):
         self.assertFalse(config.alert_email)
 
     def test_alert_fields_default_values(self):
-        """Test: valeurs par défaut correctes"""
+        """Test: valeurs par defaut correctes"""
         config = self.JsocrConfig.get_config()
         self.assertEqual(config.alert_amount_threshold, 10000.0)
         self.assertFalse(config.alert_email)
