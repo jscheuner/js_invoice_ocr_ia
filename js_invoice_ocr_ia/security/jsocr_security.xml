@@ -11,25 +11,25 @@
 
         <!-- Base user group: can view OCR jobs and validate their own invoices -->
         <record id="group_jsocr_user" model="res.groups">
-            <field name="name">JSOCR / User</field>
+            <field name="name">Utilisateur OCR</field>
             <field name="category_id" ref="module_category_jsocr"/>
-            <field name="comment">Can view OCR import jobs and validate assigned invoices.</field>
+            <field name="comment">Peut voir et valider ses propres factures OCR. Accès en lecture aux jobs d'import assignés.</field>
         </record>
 
         <!-- Manager group: can manage all jobs and masks -->
         <record id="group_jsocr_manager" model="res.groups">
-            <field name="name">JSOCR / Manager</field>
+            <field name="name">Manager OCR</field>
             <field name="category_id" ref="module_category_jsocr"/>
             <field name="implied_ids" eval="[(4, ref('group_jsocr_user'))]"/>
-            <field name="comment">Can manage all OCR import jobs, masks, and corrections.</field>
+            <field name="comment">Peut voir et valider toutes les factures OCR de l'équipe. Gestion complète des jobs, masques et corrections.</field>
         </record>
 
         <!-- Admin group: full access including configuration -->
         <record id="group_jsocr_admin" model="res.groups">
-            <field name="name">JSOCR / Admin</field>
+            <field name="name">Admin OCR</field>
             <field name="category_id" ref="module_category_jsocr"/>
             <field name="implied_ids" eval="[(4, ref('group_jsocr_manager'))]"/>
-            <field name="comment">Full access to JSOCR configuration and all features.</field>
+            <field name="comment">Accès complet: configuration système, gestion des masques, historique des corrections, paramètres Ollama.</field>
         </record>
 
     </data>

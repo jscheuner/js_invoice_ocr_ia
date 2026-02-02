@@ -4,6 +4,7 @@
     <menuitem id="menu_jsocr_root"
               name="OCR IA"
               sequence="100"
+              groups="js_invoice_ocr_ia.group_jsocr_user"
               web_icon="js_invoice_ocr_ia,static/description/icon.png"/>
 
     <!-- Configuration submenu -->
