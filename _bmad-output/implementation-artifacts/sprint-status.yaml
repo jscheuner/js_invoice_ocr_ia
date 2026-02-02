@@ -56,13 +56,13 @@ development_status:
   # ============================================
   # Epic 2: Configuration & Connectivité (6 stories)
   # ============================================
-  epic-2: in-progress
+  epic-2: done
   2-1-vue-configuration-systeme: done
   2-2-configuration-dossiers-surveilles: done
   2-3-test-connexion-ollama: done
   2-4-selection-modele-ia: done
   2-5-configuration-alertes: done
-  2-6-gestion-roles-utilisateurs: review
+  2-6-gestion-roles-utilisateurs: done
   epic-2-retrospective: optional
 
   # ============================================
