@@ -10,7 +10,8 @@
       "Bash(git push:*)",
       "Bash(python3 -m pytest:*)",
       "Bash(find:*)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(grep:*)"
     ]
   }
 }

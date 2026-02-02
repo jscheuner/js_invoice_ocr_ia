@@ -133,7 +133,7 @@ class JsocrImportJob(models.Model):
     # COMPUTE METHODS
     # -------------------------------------------------------------------------
 
-    @api.depends('id', 'pdf_filename')
+    @api.depends('pdf_filename')
     def _compute_name(self):
         """Compute job name from ID and filename."""
         for job in self:
