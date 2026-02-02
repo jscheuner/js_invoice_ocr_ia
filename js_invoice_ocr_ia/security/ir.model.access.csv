@@ -1,0 +1,13 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_jsocr_config_user,jsocr.config.user,model_jsocr_config,group_jsocr_user,1,0,0,0
+access_jsocr_config_manager,jsocr.config.manager,model_jsocr_config,group_jsocr_manager,1,0,0,0
+access_jsocr_config_admin,jsocr.config.admin,model_jsocr_config,group_jsocr_admin,1,1,1,1
+access_jsocr_import_job_user,jsocr.import.job.user,model_jsocr_import_job,group_jsocr_user,1,1,0,0
+access_jsocr_import_job_manager,jsocr.import.job.manager,model_jsocr_import_job,group_jsocr_manager,1,1,1,1
+access_jsocr_import_job_admin,jsocr.import.job.admin,model_jsocr_import_job,group_jsocr_admin,1,1,1,1
+access_jsocr_mask_user,jsocr.mask.user,model_jsocr_mask,group_jsocr_user,1,0,0,0
+access_jsocr_mask_manager,jsocr.mask.manager,model_jsocr_mask,group_jsocr_manager,1,1,1,1
+access_jsocr_mask_admin,jsocr.mask.admin,model_jsocr_mask,group_jsocr_admin,1,1,1,1
+access_jsocr_correction_user,jsocr.correction.user,model_jsocr_correction,group_jsocr_user,1,1,1,0
+access_jsocr_correction_manager,jsocr.correction.manager,model_jsocr_correction,group_jsocr_manager,1,1,1,1
+access_jsocr_correction_admin,jsocr.correction.admin,model_jsocr_correction,group_jsocr_admin,1,1,1,1

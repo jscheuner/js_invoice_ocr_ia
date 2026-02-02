@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Root menu for OCR IA -->
+    <menuitem id="menu_jsocr_root"
+              name="OCR IA"
+              sequence="100"
+              web_icon="js_invoice_ocr_ia,static/description/icon.png"/>
+
+    <!-- Configuration submenu -->
+    <menuitem id="menu_jsocr_configuration"
+              name="Configuration"
+              parent="menu_jsocr_root"
+              sequence="10"/>
+
+    <!-- System configuration menu item -->
+    <menuitem id="menu_jsocr_config"
+              name="Paramètres Système"
+              parent="menu_jsocr_configuration"
+              action="jsocr_config_action"
+              groups="js_invoice_ocr_ia.group_jsocr_admin"
+              sequence="10"/>
+</odoo>

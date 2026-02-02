@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Form view for jsocr.config -->
+    <record id="jsocr_config_view_form" model="ir.ui.view">
+        <field name="name">jsocr.config.view.form</field>
+        <field name="model">jsocr.config</field>
+        <field name="arch" type="xml">
+            <form string="Configuration OCR IA">
+                <sheet>
+                    <group name="ollama" string="Configuration Ollama">
+                        <field name="ollama_url" widget="url"
+                               help="URL du serveur Ollama (ex: http://localhost:11434)"/>
+                        <field name="ollama_model"
+                               help="Nom du modèle IA à utiliser (ex: llama3, mistral)"/>
+                        <field name="ollama_timeout"
+                               help="Timeout en secondes pour les requêtes Ollama (défaut: 120s)"/>
+                        <button name="test_ollama_connection"
+                                type="object"
+                                string="Tester la connexion"
+                                class="btn-secondary"
+                                help="Teste la connexion au serveur Ollama et récupère les modèles disponibles"/>
+                    </group>
+
+                    <group name="folders" string="Chemins des Dossiers">
+                        <field name="watch_folder_path"
+                               help="Dossier surveillé pour les nouveaux PDFs à traiter"/>
+                        <field name="success_folder_path"
+                               help="Dossier où déplacer les PDFs traités avec succès"/>
+                        <field name="error_folder_path"
+                               help="Dossier où déplacer les PDFs en erreur"/>
+                        <field name="rejected_folder_path"
+                               help="Dossier où déplacer les fichiers non-PDF rejetés"/>
+                    </group>
+
+                    <group name="alerts" string="Configuration des Alertes">
+                        <field name="alert_amount_threshold"
+                               help="Montant en CHF au-delà duquel une alerte est générée"/>
+                        <field name="alert_email" widget="email"
+                               help="Adresse email pour recevoir les alertes d'erreur (optionnel)"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Server action to open singleton configuration -->
+    <record id="jsocr_config_action" model="ir.actions.server">
+        <field name="name">Configuration OCR IA</field>
+        <field name="model_id" ref="model_jsocr_config"/>
+        <field name="state">code</field>
+        <field name="code">
+# Get or create the singleton configuration
+config = model.get_config()
+
+# Return action to open the configuration form
+action = {
+    'type': 'ir.actions.act_window',
+    'name': 'Configuration OCR IA',
+    'res_model': 'jsocr.config',
+    'res_id': config.id,
+    'view_mode': 'form',
+    'view_id': ref('jsocr_config_view_form').id,
+    'target': 'current',
+}
+        </field>
+    </record>
+</odoo>

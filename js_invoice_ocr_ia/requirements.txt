@@ -1,0 +1,14 @@
+# js_invoice_ocr_ia - Python dependencies
+# Install with: pip install -r requirements.txt
+
+# PDF text extraction (native PDFs)
+pymupdf>=1.23.0,<2.0.0
+
+# OCR for scanned PDFs
+pytesseract>=0.3.10,<1.0.0
+
+# Image processing (required by pytesseract)
+Pillow>=10.0.0,<11.0.0
+
+# HTTP client for Ollama API
+requests>=2.31.0,<3.0.0

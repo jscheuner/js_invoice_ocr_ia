@@ -1,0 +1,126 @@
+# generated: 2026-01-29
+# project: js_invoice_ocr_ia
+# project_key: jsocr
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-01-29
+project: js_invoice_ocr_ia
+project_key: jsocr
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  # ============================================
+  # Epic 1: Fondations & Installation (7 stories)
+  # ============================================
+  epic-1: done
+  1-1-structure-addon-manifest: done
+  1-2-modele-configuration: done
+  1-3-modele-import-job: done
+  1-4-modele-masque: done
+  1-5-modele-correction: done
+  1-6-extensions-modeles-existants: done
+  1-7-groupes-securite-acl: done
+  epic-1-retrospective: optional
+
+  # ============================================
+  # Epic 2: Configuration & Connectivité (6 stories)
+  # ============================================
+  epic-2: in-progress
+  2-1-vue-configuration-systeme: done
+  2-2-configuration-dossiers-surveilles: done
+  2-3-test-connexion-ollama: done
+  2-4-selection-modele-ia: review
+  2-5-configuration-alertes: backlog
+  2-6-gestion-roles-utilisateurs: backlog
+  epic-2-retrospective: optional
+
+  # ============================================
+  # Epic 3: Ingestion PDF & OCR (7 stories)
+  # ============================================
+  epic-3: backlog
+  3-1-service-ocr-extraction-pdf-natif: backlog
+  3-2-service-ocr-extraction-pdf-scanne: backlog
+  3-3-detection-automatique-langue: backlog
+  3-4-cron-job-surveillance-dossier: backlog
+  3-5-gestion-fichiers-non-pdf: backlog
+  3-6-deplacement-fichiers-succes: backlog
+  3-7-deplacement-fichiers-erreur: backlog
+  epic-3-retrospective: optional
+
+  # ============================================
+  # Epic 4: Analyse IA & Création Factures (15 stories)
+  # ============================================
+  epic-4: backlog
+  4-1-service-ollama-connexion-requete: backlog
+  4-2-prompt-extraction-structuree: backlog
+  4-3-extraction-fournisseur: backlog
+  4-4-extraction-date-numero-facture: backlog
+  4-5-extraction-lignes-facture: backlog
+  4-6-extraction-montants: backlog
+  4-7-calcul-indices-confiance: backlog
+  4-8-creation-facture-brouillon: backlog
+  4-9-pre-remplissage-lignes-facture: backlog
+  4-10-attachement-pdf-source: backlog
+  4-11-traitement-asynchrone-queue-job: backlog
+  4-12-gestion-erreurs-retry: backlog
+  4-13-vue-liste-jobs: backlog
+  4-14-affichage-statut-job: backlog
+  4-15-notification-factures-pretes: backlog
+  epic-4-retrospective: optional
+
+  # ============================================
+  # Epic 5: Validation & Indicateurs (7 stories)
+  # ============================================
+  epic-5: backlog
+  5-1-vue-formulaire-facture-pdf: backlog
+  5-2-badges-confiance-champ: backlog
+  5-3-alerte-montant-eleve: backlog
+  5-4-edition-champs-pre-remplis: backlog
+  5-5-validation-facture-brouillon: backlog
+  5-6-droits-utilisateur-standard: backlog
+  5-7-droits-manager: backlog
+  epic-5-retrospective: optional
+
+  # ============================================
+  # Epic 6: Apprentissage & Corrections (7 stories)
+  # ============================================
+  epic-6: backlog
+  6-1-enregistrement-correction-fournisseur: backlog
+  6-2-enregistrement-correction-compte-charge: backlog
+  6-3-amelioration-precision-historique: backlog
+  6-4-vue-historique-corrections: backlog
+  6-5-stockage-masques-fournisseur: backlog
+  6-6-vue-gestion-masques: backlog
+  6-7-generation-automatique-masque: backlog
+  epic-6-retrospective: optional
