@@ -125,6 +125,10 @@ addons/web_kanban
 *.conf
 !example.conf
 
+# GitHub credentials
+.git/github-token.txt
+*token*.txt
+
 # Temporary files
 *.tmp
 *.bak
