@@ -1,6 +1,6 @@
 # Story 2.4: Sélection du Modèle IA
 
-Status: corrections-required
+Status: review
 
 ## Story
 
@@ -391,6 +391,14 @@ Claude Sonnet 4.5 (claude-sonnet-4-5-20250929)
   - Task 6 ajoutée avec corrections détaillées
   - Section "Review Findings & Required Corrections" ajoutée avec solutions complètes
   - Estimation: 30-45 minutes pour appliquer corrections P0+P1
+- **Corrections applied 2026-02-02:**
+  - CRITICAL: Fixed _get_ollama_models() to handle empty self context (P0)
+  - MAJOR: Added explicit import `from js_invoice_ocr_ia.models.jsocr_config import JsocrConfig` (P1)
+  - MAJOR: Added test_fetch_available_models_invalid_json for JSON parsing errors (P1)
+  - MINOR: Added test_fetch_available_models_logs_success for logging validation (P2)
+  - MINOR: Added test_fetch_available_models_logs_error for error logging validation (P2)
+  - All 5 corrections successfully applied and validated
+  - Status changé de "corrections-required" à "review" (prêt pour validation finale)
 
 ### File List
 

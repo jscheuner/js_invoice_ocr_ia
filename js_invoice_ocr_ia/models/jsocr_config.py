@@ -190,6 +190,9 @@ class JsocrConfig(models.Model):
     def _get_ollama_models(self):
         """Retourne la liste des modèles disponibles pour le champ Selection.
 
+        Cette méthode peut être appelée par Odoo même si self est vide ou non initialisé.
+        Elle récupère automatiquement le config singleton si nécessaire.
+
         Called automatically by Odoo when rendering the Selection field.
         Fetches available models from Ollama API and formats them for the dropdown.
 
@@ -197,7 +200,19 @@ class JsocrConfig(models.Model):
             list: Liste de tuples (value, label) pour le champ Selection.
                   Retourne au moins le modèle par défaut si aucun modèle disponible.
         """
-        models = self._fetch_available_models()
+        # Récupérer le config singleton pour avoir accès à ollama_url
+        # Ceci fonctionne même si self est vide ou pas encore créé
+        if self:
+            config = self
+        else:
+            # Si self est vide, rechercher le singleton existant
+            config = self.env['jsocr.config'].sudo().search([], limit=1)
+            if not config:
+                # Aucun config n'existe encore, retourner le défaut
+                return [('llama3', 'llama3 (défaut)')]
+
+        # Récupérer les modèles disponibles
+        models = config._fetch_available_models()
         if not models:
             # Fallback: retourner au moins le modèle par défaut
             return [('llama3', 'llama3 (défaut)')]

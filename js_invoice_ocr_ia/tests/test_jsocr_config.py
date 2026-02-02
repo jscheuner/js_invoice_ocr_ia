@@ -7,6 +7,7 @@ from odoo.tests import TransactionCase
 from odoo.exceptions import ValidationError, UserError
 from psycopg2 import IntegrityError
 import logging
+from js_invoice_ocr_ia.models.jsocr_config import JsocrConfig
 
 
 class TestJsocrConfig(TransactionCase):
@@ -461,3 +462,61 @@ class TestJsocrConfig(TransactionCase):
         config = self.JsocrConfig.create({})
 
         self.assertEqual(config.ollama_model, 'llama3')
+
+    # -------------------------------------------------------------------------
+    # Tests supplémentaires Story 2.4 (Corrections post-review)
+    # -------------------------------------------------------------------------
+
+    @patch('js_invoice_ocr_ia.models.jsocr_config.requests.get')
+    def test_fetch_available_models_invalid_json(self, mock_get):
+        """Test: _fetch_available_models retourne [] si JSON invalide"""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.side_effect = ValueError("Invalid JSON")
+        mock_get.return_value = mock_response
+
+        config = self.JsocrConfig.create({
+            'ollama_url': 'http://localhost:11434'
+        })
+
+        models = config._fetch_available_models()
+
+        self.assertEqual(models, [])
+
+    @patch('js_invoice_ocr_ia.models.jsocr_config.requests.get')
+    @patch('js_invoice_ocr_ia.models.jsocr_config._logger')
+    def test_fetch_available_models_logs_success(self, mock_logger, mock_get):
+        """Test: _fetch_available_models log le nombre de modèles récupérés"""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            'models': [
+                {'name': 'llama3:latest'},
+                {'name': 'mistral:latest'}
+            ]
+        }
+        mock_get.return_value = mock_response
+
+        config = self.JsocrConfig.create({
+            'ollama_url': 'http://localhost:11434'
+        })
+
+        models = config._fetch_available_models()
+
+        # Vérifier le log de succès
+        mock_logger.info.assert_called_once_with("JSOCR: Retrieved 2 model(s) from Ollama")
+
+    @patch('js_invoice_ocr_ia.models.jsocr_config.requests.get')
+    @patch('js_invoice_ocr_ia.models.jsocr_config._logger')
+    def test_fetch_available_models_logs_error(self, mock_logger, mock_get):
+        """Test: _fetch_available_models log les erreurs de connexion"""
+        mock_get.side_effect = requests.ConnectionError()
+
+        config = self.JsocrConfig.create({
+            'ollama_url': 'http://localhost:11434'
+        })
+
+        models = config._fetch_available_models()
+
+        # Vérifier le log d'erreur
+        mock_logger.warning.assert_called_once_with("JSOCR: Could not fetch models - ConnectionError")
