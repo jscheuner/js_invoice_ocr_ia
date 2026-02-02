@@ -30,7 +30,7 @@ Support natif français, allemand et anglais (contexte suisse).
     'license': 'LGPL-3',
     'depends': [
         'account',
-        'queue_job',
+        # 'queue_job',  # TODO: Uncomment in Epic 4 (async job processing)
     ],
     'external_dependencies': {
         'python': [
@@ -66,5 +66,5 @@ Support natif français, allemand et anglais (contexte suisse).
     'installable': True,
     'application': False,
     'auto_install': False,
-    'post_init_hook': 'post_init_hook',
+    # 'post_init_hook': 'post_init_hook',  # TODO: Uncomment in Epic 4 (queue_job check)
 }
