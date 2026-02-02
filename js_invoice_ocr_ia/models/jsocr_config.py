@@ -109,6 +109,15 @@ class JsocrConfig(models.Model):
                     "L'URL Ollama n'est pas valide. Format attendu: http(s)://host:port"
                 )
 
+    @api.constrains('alert_amount_threshold')
+    def _check_alert_amount_threshold(self):
+        """Validate that alert_amount_threshold is positive"""
+        for record in self:
+            if record.alert_amount_threshold is not None and record.alert_amount_threshold <= 0:
+                raise ValidationError(
+                    "Le seuil d'alerte doit être un montant positif (> 0)."
+                )
+
     @api.constrains('alert_email')
     def _check_alert_email(self):
         """Validate email format for alert_email"""

@@ -520,3 +520,87 @@ class TestJsocrConfig(TransactionCase):
 
         # Vérifier le log d'erreur
         mock_logger.warning.assert_called_once_with("JSOCR: Could not fetch models - ConnectionError")
+
+    # ========================================
+    # Tests pour Story 2.5: Configuration des Alertes
+    # ========================================
+
+    def test_alert_amount_threshold_accepts_positive_values(self):
+        """Test: alert_amount_threshold accepte montants > 0"""
+        config = self.JsocrConfig.create({
+            'alert_amount_threshold': 5000.0
+        })
+        self.assertEqual(config.alert_amount_threshold, 5000.0)
+
+        # Test avec d'autres valeurs positives
+        config.write({'alert_amount_threshold': 1.0})
+        self.assertEqual(config.alert_amount_threshold, 1.0)
+
+        config.write({'alert_amount_threshold': 100000.0})
+        self.assertEqual(config.alert_amount_threshold, 100000.0)
+
+    def test_alert_amount_threshold_rejects_zero(self):
+        """Test: alert_amount_threshold rejette 0"""
+        with self.assertRaises(ValidationError) as context:
+            self.JsocrConfig.create({
+                'alert_amount_threshold': 0.0
+            })
+        self.assertIn("seuil d'alerte", str(context.exception).lower())
+
+    def test_alert_amount_threshold_rejects_negative(self):
+        """Test: alert_amount_threshold rejette valeurs négatives"""
+        with self.assertRaises(ValidationError) as context:
+            self.JsocrConfig.create({
+                'alert_amount_threshold': -100.0
+            })
+        self.assertIn("seuil d'alerte", str(context.exception).lower())
+
+        # Test avec write aussi
+        config = self.JsocrConfig.create({'alert_amount_threshold': 5000.0})
+        with self.assertRaises(ValidationError):
+            config.write({'alert_amount_threshold': -50.0})
+
+    def test_alert_email_accepts_valid_format(self):
+        """Test: alert_email accepte format valide"""
+        config = self.JsocrConfig.create({
+            'alert_email': 'admin@example.com'
+        })
+        self.assertEqual(config.alert_email, 'admin@example.com')
+
+        # Test avec d'autres formats valides
+        config.write({'alert_email': 'test.user+tag@sub.domain.com'})
+        self.assertEqual(config.alert_email, 'test.user+tag@sub.domain.com')
+
+    def test_alert_email_rejects_invalid_format(self):
+        """Test: alert_email rejette format invalide"""
+        with self.assertRaises(ValidationError) as context:
+            self.JsocrConfig.create({
+                'alert_email': 'not-an-email'
+            })
+        self.assertIn("email", str(context.exception).lower())
+
+        # Test avec d'autres formats invalides
+        config = self.JsocrConfig.create({'alert_email': False})
+
+        with self.assertRaises(ValidationError):
+            config.write({'alert_email': 'missing@domain'})
+
+        with self.assertRaises(ValidationError):
+            config.write({'alert_email': '@nodomain.com'})
+
+    def test_alert_email_accepts_empty_value(self):
+        """Test: alert_email peut être vide (optionnel)"""
+        config = self.JsocrConfig.create({
+            'alert_email': False
+        })
+        self.assertFalse(config.alert_email)
+
+        # Test avec empty string aussi
+        config.write({'alert_email': ''})
+        self.assertFalse(config.alert_email)
+
+    def test_alert_fields_default_values(self):
+        """Test: valeurs par défaut correctes"""
+        config = self.JsocrConfig.get_config()
+        self.assertEqual(config.alert_amount_threshold, 10000.0)
+        self.assertFalse(config.alert_email)
