@@ -50,28 +50,28 @@ class JsocrConfig(models.Model):
     # Chemins des dossiers de traitement
     watch_folder_path = fields.Char(
         string='Watch Folder',
-        default='/opt/odoo/ocr_input',
+        default='/opt/jsocr/watch',
         required=True,
         help='Chemin du dossier a surveiller pour nouveaux PDFs'
     )
 
     success_folder_path = fields.Char(
         string='Success Folder',
-        default='/opt/odoo/ocr_success',
+        default='/opt/jsocr/success',
         required=True,
         help='Chemin du dossier pour fichiers traites avec succes'
     )
 
     error_folder_path = fields.Char(
         string='Error Folder',
-        default='/opt/odoo/ocr_error',
+        default='/opt/jsocr/error',
         required=True,
         help='Chemin du dossier pour fichiers en erreur'
     )
 
     rejected_folder_path = fields.Char(
         string='Rejected Folder',
-        default='/opt/odoo/ocr_rejected',
+        default='/opt/jsocr/rejected',
         required=True,
         help='Chemin du dossier pour fichiers non-PDF rejetes'
     )

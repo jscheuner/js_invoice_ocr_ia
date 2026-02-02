@@ -210,8 +210,8 @@ class TestJsocrConfigViews(TransactionCase):
     def test_default_watch_folder_path(self):
         """Test that default watch_folder_path is set correctly."""
         config = self.env['jsocr.config'].create({})
-        self.assertEqual(config.watch_folder_path, '/opt/odoo/ocr_input',
-                        "Default watch_folder_path should be /opt/odoo/ocr_input")
+        self.assertEqual(config.watch_folder_path, '/opt/jsocr/watch',
+                        "Default watch_folder_path should be /opt/jsocr/watch")
 
     def test_default_alert_amount_threshold(self):
         """Test that default alert_amount_threshold is set correctly."""
@@ -227,10 +227,10 @@ class TestJsocrConfigViews(TransactionCase):
         self.assertEqual(config.ollama_model, 'llama3')
         self.assertEqual(config.ollama_timeout, 120)
         # Folder defaults
-        self.assertEqual(config.watch_folder_path, '/opt/odoo/ocr_input')
-        self.assertEqual(config.success_folder_path, '/opt/odoo/ocr_success')
-        self.assertEqual(config.error_folder_path, '/opt/odoo/ocr_error')
-        self.assertEqual(config.rejected_folder_path, '/opt/odoo/ocr_rejected')
+        self.assertEqual(config.watch_folder_path, '/opt/jsocr/watch')
+        self.assertEqual(config.success_folder_path, '/opt/jsocr/success')
+        self.assertEqual(config.error_folder_path, '/opt/jsocr/error')
+        self.assertEqual(config.rejected_folder_path, '/opt/jsocr/rejected')
         # Alert defaults
         self.assertEqual(config.alert_amount_threshold, 10000.0)
         self.assertFalse(config.alert_email, "alert_email should have no default")
