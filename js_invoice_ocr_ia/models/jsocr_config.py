@@ -130,7 +130,7 @@ class JsocrConfig(models.Model):
 
     @api.constrains('watch_folder_path', 'success_folder_path', 'error_folder_path', 'rejected_folder_path')
     def _check_folder_paths(self):
-        """Validate folder paths are absolute with existing, accessible parents"""
+        """Validate folder paths and create directories automatically if they don't exist"""
         for record in self:
             folder_fields = {
                 'watch_folder_path': 'Dossier surveille',
@@ -159,19 +159,21 @@ class JsocrConfig(models.Model):
                         f"Valeur actuelle: {path_str}"
                     )
 
-                # Verifier existence du parent
-                parent = path.parent
-                if not parent.exists():
+                # Creer le repertoire automatiquement s'il n'existe pas
+                try:
+                    path.mkdir(parents=True, exist_ok=True)
+                    _logger.info(f"JSOCR: Directory created or verified: {path_str}")
+                except PermissionError:
                     raise ValidationError(
-                        f"{field_label}: Le repertoire parent n'existe pas. "
-                        f"Parent attendu: {parent}"
+                        f"{field_label}: Permissions insuffisantes pour creer le repertoire. "
+                        f"Chemin: {path_str}. "
+                        f"Veuillez creer manuellement avec: sudo mkdir -p {path_str} && sudo chown odoo:odoo {path_str}"
                     )
-
-                # Verifier permissions
-                if not os.access(str(parent), os.R_OK | os.W_OK):
+                except OSError as e:
                     raise ValidationError(
-                        f"{field_label}: Permissions insuffisantes (lecture/ecriture requises). "
-                        f"Chemin: {path_str}"
+                        f"{field_label}: Impossible de creer le repertoire. "
+                        f"Chemin: {path_str}. "
+                        f"Erreur: {str(e)}"
                     )
 
     @api.model
