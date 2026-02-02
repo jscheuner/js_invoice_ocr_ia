@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 # Part of js_invoice_ocr_ia. See LICENSE file for full copyright and licensing details.
 
+import base64
 import logging
 import os
 import re
 import requests
+import shutil
+from datetime import datetime
 from pathlib import Path
 from odoo import models, fields, api, tools
 from odoo.exceptions import ValidationError, UserError
@@ -164,10 +167,12 @@ class JsocrConfig(models.Model):
                     path.mkdir(parents=True, exist_ok=True)
                     _logger.info(f"JSOCR: Directory created or verified: {path_str}")
                 except PermissionError:
+                    import getpass
+                    current_user = getpass.getuser()
                     raise ValidationError(
                         f"{field_label}: Permissions insuffisantes pour creer le repertoire. "
                         f"Chemin: {path_str}. "
-                        f"Veuillez creer manuellement avec: sudo mkdir -p {path_str} && sudo chown odoo:odoo {path_str}"
+                        f"Veuillez creer manuellement avec: sudo mkdir -p {path_str} && sudo chown {current_user}:{current_user} {path_str}"
                     )
                 except OSError as e:
                     raise ValidationError(
@@ -177,26 +182,19 @@ class JsocrConfig(models.Model):
                     )
 
     @api.model
-    @tools.ormcache()
     def get_config(self):
         """Retourne l'enregistrement de configuration unique (le cree si necessaire)
 
         Uses sudo() to ensure creation works even for users without create rights.
-        Result is cached via @tools.ormcache for performance.
 
         Returns:
             jsocr.config: L'enregistrement de configuration unique
         """
-        config = self.search([], limit=1)
+        config = self.sudo().search([], limit=1)
         if not config:
             # Use sudo() to create config even if current user lacks create rights
             config = self.sudo().create({})
         return config
-
-    def write(self, vals):
-        """Clear cache when config is modified"""
-        self.env.registry.clear_cache()
-        return super().write(vals)
 
     def _get_ollama_models(self):
         """Retourne la liste des modeles disponibles pour le champ Selection.
@@ -336,3 +334,187 @@ class JsocrConfig(models.Model):
             error_msg = "Erreur: Structure de reponse invalide du serveur Ollama"
             _logger.error("JSOCR: Invalid response structure from Ollama")
             raise UserError(error_msg)
+
+    # -------------------------------------------------------------------------
+    # FOLDER SCANNING (Story 3.4)
+    # -------------------------------------------------------------------------
+
+    @api.model
+    def scan_input_folder(self):
+        """Scan watch folder for new PDFs and create import jobs.
+
+        Called by ir.cron every 5 minutes (ir_cron_jsocr_scan_folder).
+        Creates a jsocr.import.job for each PDF found in watch_folder_path.
+        Files are removed from watch folder after job creation to prevent
+        duplicate processing.
+
+        This method only processes PDF files. Non-PDF files are ignored
+        (handled by Story 3.5).
+
+        Returns:
+            int: Number of jobs created
+        """
+        config = self.get_config()
+
+        if not config.watch_folder_path:
+            _logger.warning("JSOCR: Watch folder not configured")
+            return 0
+
+        watch_path = Path(config.watch_folder_path)
+
+        if not watch_path.exists():
+            _logger.warning("JSOCR: Watch folder does not exist: %s", watch_path)
+            return 0
+
+        if not watch_path.is_dir():
+            _logger.warning("JSOCR: Watch path is not a directory: %s", watch_path)
+            return 0
+
+        # Find PDF files (case-insensitive)
+        pdf_files = list(watch_path.glob('*.pdf')) + list(watch_path.glob('*.PDF'))
+        # Remove duplicates (in case *.pdf and *.PDF match same files on case-insensitive systems)
+        pdf_files = list(set(pdf_files))
+
+        _logger.info("JSOCR: Scan found %d PDF file(s) to process", len(pdf_files))
+
+        jobs_created = 0
+        for pdf_path in pdf_files:
+            try:
+                if self._process_pdf_file(pdf_path):
+                    jobs_created += 1
+            except Exception as e:
+                _logger.error(
+                    "JSOCR: Failed to process file %s: %s",
+                    pdf_path.name, type(e).__name__
+                )
+                # Continue with other files
+
+        # Handle non-PDF files (Story 3.5)
+        all_files = [f for f in watch_path.iterdir() if f.is_file()]
+        rejected_count = 0
+        for file_path in all_files:
+            if file_path.suffix.lower() != '.pdf':
+                try:
+                    self._reject_non_pdf_file(file_path)
+                    rejected_count += 1
+                except Exception as e:
+                    _logger.error(
+                        "JSOCR: Failed to reject file %s: %s",
+                        file_path.name, type(e).__name__
+                    )
+
+        _logger.info("JSOCR: Scan complete - %d job(s) created, %d file(s) rejected", jobs_created, rejected_count)
+        return jobs_created
+
+    def _process_pdf_file(self, pdf_path):
+        """Process a single PDF file and create an import job.
+
+        Reads the PDF content, creates a jsocr.import.job in 'pending' state,
+        and removes the source file from watch folder.
+
+        Args:
+            pdf_path (Path): Path to the PDF file
+
+        Returns:
+            bool: True if job created successfully, False otherwise
+        """
+        if not pdf_path.exists():
+            _logger.warning("JSOCR: File no longer exists: %s", pdf_path.name)
+            return False
+
+        if not pdf_path.is_file():
+            _logger.warning("JSOCR: Path is not a file: %s", pdf_path.name)
+            return False
+
+        try:
+            # Read PDF content
+            pdf_content = pdf_path.read_bytes()
+            pdf_base64 = base64.b64encode(pdf_content).decode('utf-8')
+
+            # Create import job
+            job = self.env['jsocr.import.job'].create({
+                'pdf_file': pdf_base64,
+                'pdf_filename': pdf_path.name,
+            })
+
+            # Submit job (draft -> pending)
+            job.action_submit()
+
+            _logger.info("JSOCR: Created job %s for file %s", job.id, pdf_path.name)
+
+            # Remove file from watch folder to prevent duplicate processing
+            pdf_path.unlink()
+            _logger.info("JSOCR: Removed processed file %s", pdf_path.name)
+
+            return True
+
+        except PermissionError:
+            _logger.error("JSOCR: Permission denied reading file %s", pdf_path.name)
+            return False
+        except IOError as e:
+            _logger.error("JSOCR: IO error reading file %s: %s", pdf_path.name, str(e))
+            return False
+
+    # -------------------------------------------------------------------------
+    # NON-PDF FILE REJECTION (Story 3.5)
+    # -------------------------------------------------------------------------
+
+    def _reject_non_pdf_file(self, file_path):
+        """Reject a non-PDF file by moving it to rejected_folder_path.
+
+        Moves the file to the rejected folder. If a file with the same name
+        already exists, adds a timestamp prefix (YYYYMMDD_HHMMSS_) to ensure
+        uniqueness. Sends an email alert if alert_email is configured.
+
+        Args:
+            file_path (Path): Path to the non-PDF file to reject
+        """
+        config = self.get_config()
+        rejected_path = Path(config.rejected_folder_path)
+
+        # Ensure rejected folder exists
+        if not rejected_path.exists():
+            rejected_path.mkdir(parents=True, exist_ok=True)
+
+        # Generate destination filename (with timestamp if duplicate)
+        dest_name = file_path.name
+        dest_path = rejected_path / dest_name
+
+        if dest_path.exists():
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            dest_name = f"{timestamp}_{file_path.name}"
+            dest_path = rejected_path / dest_name
+
+        # Move file to rejected folder
+        shutil.move(str(file_path), str(dest_path))
+        _logger.info("JSOCR: Rejected non-PDF file: %s", file_path.name)
+
+        # Send alert email if configured
+        if config.alert_email:
+            self._send_rejection_alert(file_path.name)
+
+    def _send_rejection_alert(self, filename):
+        """Send email alert for rejected non-PDF file.
+
+        Creates and sends a mail.mail record to notify the configured
+        alert_email address that a file was rejected.
+
+        Args:
+            filename (str): Name of the rejected file
+        """
+        config = self.get_config()
+        if not config.alert_email:
+            return
+
+        mail_values = {
+            'subject': 'JSOCR: Fichier non-PDF rejete',
+            'body_html': f'<p>Le fichier <b>{filename}</b> a ete rejete car ce n\'est pas un PDF.</p>',
+            'email_to': config.alert_email,
+        }
+
+        try:
+            mail = self.env['mail.mail'].sudo().create(mail_values)
+            mail.send()
+            _logger.info("JSOCR: Rejection alert email sent for file: %s", filename)
+        except Exception as e:
+            _logger.error("JSOCR: Failed to send rejection alert email: %s", type(e).__name__)

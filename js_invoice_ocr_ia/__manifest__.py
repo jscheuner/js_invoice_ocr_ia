@@ -32,14 +32,13 @@ Support natif francais, allemand et anglais (contexte suisse).
         'account',
         # 'queue_job',  # TODO: Uncomment in Epic 4 (async job processing)
     ],
-    # 'external_dependencies': {
-    #     'python': [
-    #         'pymupdf',       # TODO: Uncomment in Epic 3 (PDF text extraction)
-    #         'pytesseract',   # TODO: Uncomment in Epic 3 (OCR for scanned PDFs)
-    #         'Pillow',        # TODO: Uncomment in Epic 3 (Image processing)
-    #         'requests',      # Already used in Epic 2 but Odoo includes it
-    #     ],
-    # },
+    'external_dependencies': {
+        'python': [
+            'fitz',          # PyMuPDF for PDF text extraction (Story 3.1)
+            'pytesseract',   # Tesseract OCR for scanned PDFs (Story 3.2)
+            'PIL',           # Pillow for image processing (Story 3.2)
+        ],
+    },
     'data': [
         # Security (Story 1.7)
         'security/jsocr_security.xml',
@@ -47,10 +46,11 @@ Support natif francais, allemand et anglais (contexte suisse).
 
         # Views (Story 2.1+)
         'views/jsocr_config_views.xml',
+        'views/jsocr_import_job_views.xml',
         'views/menu.xml',
 
-        # Data - will be added in Epic 3+
-        # 'data/jsocr_cron.xml',
+        # Data (Story 3.4+)
+        'data/jsocr_cron.xml',
     ],
     'demo': [
         # Demo data - optional

@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 # Part of js_invoice_ocr_ia. See LICENSE file for full copyright and licensing details.
 
+import base64
 import logging
+from datetime import datetime
+from pathlib import Path
 
 from odoo import models, fields, api
 from odoo.exceptions import UserError
@@ -86,6 +89,17 @@ class JsocrImportJob(models.Model):
     error_message = fields.Text(
         string='Error Message',
         help='Error details if job failed',
+    )
+
+    detected_language = fields.Selection(
+        selection=[
+            ('fr', 'French'),
+            ('de', 'German'),
+            ('en', 'English'),
+        ],
+        string='Detected Language',
+        default='fr',
+        help='Language detected in the PDF document (ISO 639-1 code)',
     )
 
     # Relations
@@ -199,11 +213,48 @@ class JsocrImportJob(models.Model):
             job.state = 'processing'
             _logger.info("JSOCR: Job %s processing started", job.id)
 
+    def action_extract_text(self):
+        """Extract text from PDF using OCR (button action).
+
+        Can be called from the UI when job is in 'processing' state.
+        Extracts text and detects language.
+
+        Returns:
+            dict: Notification action with result message
+        """
+        self.ensure_one()
+
+        if self.state != 'processing':
+            raise UserError(
+                f"Cannot extract text for job in state '{self.state}'. "
+                "Job must be in 'processing' state."
+            )
+
+        try:
+            self._extract_text()
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Extraction reussie',
+                    'message': f'Langue detectee: {self.detected_language}. '
+                               f'{len(self.extracted_text or "")} caracteres extraits.',
+                    'type': 'success',
+                    'sticky': False,
+                }
+            }
+        except UserError:
+            raise
+        except Exception as e:
+            _logger.error("JSOCR: Job %s extraction failed: %s", self.id, str(e))
+            raise UserError(f"Extraction failed: {str(e)}")
+
     def action_mark_done(self):
         """Mark job as successfully completed (processing -> done).
 
         Called by the processing service when OCR and AI analysis
         complete successfully and the invoice is created.
+        Also moves the PDF to success folder (Story 3.6).
 
         Raises:
             UserError: If job is not in processing state.
@@ -216,6 +267,15 @@ class JsocrImportJob(models.Model):
                 )
             job.state = 'done'
             _logger.info("JSOCR: Job %s completed successfully", job.id)
+
+            # Move PDF to success folder (Story 3.6)
+            try:
+                job._move_pdf_to_success()
+            except Exception as e:
+                _logger.error(
+                    "JSOCR: Job %s failed to move PDF to success folder: %s",
+                    job.id, type(e).__name__
+                )
 
     def action_mark_error(self, error_message=None, error_type=None):
         """Mark job as error with optional message (processing -> error).
@@ -282,6 +342,7 @@ class JsocrImportJob(models.Model):
 
         Called when the job should not be retried anymore, either
         manually or after max retries exceeded.
+        Also moves the PDF to error folder and sends alert email (Story 3.7).
 
         Raises:
             UserError: If job is not in error state.
@@ -294,6 +355,24 @@ class JsocrImportJob(models.Model):
                 )
             job.state = 'failed'
             _logger.warning("JSOCR: Job %s marked as failed", job.id)
+
+            # Move PDF to error folder (Story 3.7)
+            try:
+                job._move_pdf_to_error()
+            except Exception as e:
+                _logger.error(
+                    "JSOCR: Job %s failed to move PDF to error folder: %s",
+                    job.id, type(e).__name__
+                )
+
+            # Send failure alert email (Story 3.7)
+            try:
+                job._send_failure_alert()
+            except Exception as e:
+                _logger.error(
+                    "JSOCR: Job %s failed to send failure alert: %s",
+                    job.id, type(e).__name__
+                )
 
     def action_cancel(self):
         """Cancel job and reset to draft.
@@ -347,3 +426,160 @@ class JsocrImportJob(models.Model):
         if self.retry_count < len(RETRY_DELAYS):
             return RETRY_DELAYS[self.retry_count]
         return RETRY_DELAYS[-1]
+
+    # -------------------------------------------------------------------------
+    # OCR EXTRACTION METHODS
+    # -------------------------------------------------------------------------
+
+    def _extract_text(self):
+        """Extract text from PDF using OCR service.
+
+        Uses OCRService to extract text from the job's PDF file and stores
+        the result in the extracted_text field. Also detects and stores
+        the document language.
+
+        Returns:
+            str: Extracted text from PDF
+
+        Raises:
+            UserError: If PDF file is missing or extraction fails
+        """
+        self.ensure_one()
+
+        if not self.pdf_file:
+            raise UserError("Cannot extract text: PDF file is missing")
+
+        _logger.info("JSOCR: Job %s starting text extraction", self.id)
+
+        try:
+            # Import OCR service
+            from odoo.addons.js_invoice_ocr_ia.services.ocr_service import OCRService
+
+            # Decode base64 PDF to bytes
+            pdf_binary = base64.b64decode(self.pdf_file)
+
+            # Extract text using OCR service
+            ocr = OCRService()
+            extracted_text = ocr.extract_text_from_pdf(pdf_binary)
+
+            # Detect language from extracted text (Story 3.3)
+            detected_lang = ocr.detect_language(extracted_text)
+
+            # Store results
+            self.write({
+                'extracted_text': extracted_text,
+                'detected_language': detected_lang,
+            })
+
+            _logger.info("JSOCR: Job %s text extraction complete (lang=%s)", self.id, detected_lang)
+            return extracted_text
+
+        except ValueError as e:
+            error_msg = str(e)
+            _logger.error("JSOCR: Job %s extraction failed: %s", self.id, type(e).__name__)
+            raise UserError(f"Text extraction failed: {error_msg}") from e
+        except Exception as e:
+            _logger.error("JSOCR: Job %s unexpected extraction error: %s", self.id, type(e).__name__)
+            raise UserError(f"Unexpected error during text extraction: {type(e).__name__}") from e
+
+    # -------------------------------------------------------------------------
+    # FILE MOVEMENT METHODS (Story 3.6, 3.7)
+    # -------------------------------------------------------------------------
+
+    def _move_pdf_to_success(self):
+        """Move PDF to success folder with timestamp prefix (Story 3.6).
+
+        Copies the PDF content from the binary field to the success folder.
+        The filename is prefixed with timestamp (YYYYMMDD_HHMMSS_).
+        Files are never deleted, only archived (NFR12).
+        """
+        self.ensure_one()
+
+        if not self.pdf_file:
+            _logger.warning("JSOCR: Job %s has no PDF file to move", self.id)
+            return
+
+        config = self.env['jsocr.config'].get_config()
+        if not config.success_folder_path:
+            _logger.warning("JSOCR: Success folder not configured")
+            return
+
+        success_path = Path(config.success_folder_path)
+
+        # Ensure folder exists
+        if not success_path.exists():
+            success_path.mkdir(parents=True, exist_ok=True)
+
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        dest_name = f"{timestamp}_{self.pdf_filename}"
+        dest_path = success_path / dest_name
+
+        # Write PDF content to file
+        pdf_content = base64.b64decode(self.pdf_file)
+        dest_path.write_bytes(pdf_content)
+
+        _logger.info("JSOCR: Job %s PDF moved to success: %s", self.id, dest_name)
+
+    def _move_pdf_to_error(self):
+        """Move PDF to error folder with timestamp prefix (Story 3.7).
+
+        Copies the PDF content from the binary field to the error folder.
+        The filename is prefixed with timestamp (YYYYMMDD_HHMMSS_).
+        """
+        self.ensure_one()
+
+        if not self.pdf_file:
+            _logger.warning("JSOCR: Job %s has no PDF file to move", self.id)
+            return
+
+        config = self.env['jsocr.config'].get_config()
+        if not config.error_folder_path:
+            _logger.warning("JSOCR: Error folder not configured")
+            return
+
+        error_path = Path(config.error_folder_path)
+
+        # Ensure folder exists
+        if not error_path.exists():
+            error_path.mkdir(parents=True, exist_ok=True)
+
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        dest_name = f"{timestamp}_{self.pdf_filename}"
+        dest_path = error_path / dest_name
+
+        # Write PDF content to file
+        pdf_content = base64.b64decode(self.pdf_file)
+        dest_path.write_bytes(pdf_content)
+
+        _logger.info("JSOCR: Job %s PDF moved to error: %s", self.id, dest_name)
+
+    def _send_failure_alert(self):
+        """Send email alert for failed job (Story 3.7).
+
+        Sends notification email to alert_email if configured.
+        Includes filename and error message in the email body.
+        """
+        self.ensure_one()
+
+        config = self.env['jsocr.config'].get_config()
+        if not config.alert_email:
+            return
+
+        error_detail = self.error_message or 'Aucun detail disponible'
+
+        mail_values = {
+            'subject': f'JSOCR: Echec traitement - {self.pdf_filename}',
+            'body_html': f'''<p>Le traitement du fichier <b>{self.pdf_filename}</b> a echoue.</p>
+<p>Job ID: {self.id}</p>
+<p>Erreur: {error_detail}</p>''',
+            'email_to': config.alert_email,
+        }
+
+        try:
+            mail = self.env['mail.mail'].sudo().create(mail_values)
+            mail.send()
+            _logger.info("JSOCR: Job %s failure alert email sent", self.id)
+        except Exception as e:
+            _logger.error("JSOCR: Job %s failed to send alert email: %s", self.id, type(e).__name__)

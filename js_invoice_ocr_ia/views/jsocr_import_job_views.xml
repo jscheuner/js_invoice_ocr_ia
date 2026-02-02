@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- List view for jsocr.import.job -->
+    <record id="jsocr_import_job_view_list" model="ir.ui.view">
+        <field name="name">jsocr.import.job.view.list</field>
+        <field name="model">jsocr.import.job</field>
+        <field name="arch" type="xml">
+            <list string="Import Jobs" decoration-success="state=='done'" decoration-danger="state in ('error','failed')" decoration-warning="state=='processing'">
+                <field name="name"/>
+                <field name="pdf_filename"/>
+                <field name="state" widget="badge" decoration-success="state=='done'" decoration-danger="state in ('error','failed')" decoration-warning="state=='processing'" decoration-info="state=='pending'"/>
+                <field name="detected_language"/>
+                <field name="retry_count"/>
+                <field name="create_date"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form view for jsocr.import.job -->
+    <record id="jsocr_import_job_view_form" model="ir.ui.view">
+        <field name="name">jsocr.import.job.view.form</field>
+        <field name="model">jsocr.import.job</field>
+        <field name="arch" type="xml">
+            <form string="Import Job">
+                <header>
+                    <button name="action_submit" type="object" string="Soumettre" class="btn-primary" invisible="state != 'draft'"/>
+                    <button name="action_process" type="object" string="Traiter" class="btn-primary" invisible="state != 'pending'"/>
+                    <button name="action_extract_text" type="object" string="Extraire Texte (OCR)" class="btn-info" invisible="state != 'processing'"/>
+                    <button name="action_mark_done" type="object" string="Marquer termine" class="btn-success" invisible="state != 'processing'"/>
+                    <button name="action_mark_error" type="object" string="Marquer erreur" class="btn-warning" invisible="state != 'processing'"/>
+                    <button name="action_retry" type="object" string="Reessayer" class="btn-warning" invisible="state != 'error' or not can_retry"/>
+                    <button name="action_mark_failed" type="object" string="Marquer echec" class="btn-danger" invisible="state != 'error'"/>
+                    <button name="action_cancel" type="object" string="Annuler" invisible="state in ('done', 'failed')"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,pending,processing,done"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group string="Fichier PDF">
+                            <field name="pdf_filename" readonly="1"/>
+                            <field name="pdf_file" filename="pdf_filename" readonly="1"/>
+                            <field name="detected_language" readonly="1"/>
+                        </group>
+                        <group string="Statut">
+                            <field name="retry_count" readonly="1"/>
+                            <field name="can_retry" invisible="1"/>
+                            <field name="is_final_state" invisible="1"/>
+                            <field name="invoice_id" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Texte extrait" name="extracted_text">
+                            <field name="extracted_text" readonly="1"/>
+                        </page>
+                        <page string="Reponse IA" name="ai_response">
+                            <field name="ai_response" readonly="1"/>
+                        </page>
+                        <page string="Erreur" name="error" invisible="not error_message">
+                            <field name="error_message" readonly="1"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action to open import jobs list -->
+    <record id="jsocr_import_job_action" model="ir.actions.act_window">
+        <field name="name">Import Jobs</field>
+        <field name="res_model">jsocr.import.job</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Aucun job d'import
+            </p>
+            <p>
+                Les jobs sont crees automatiquement quand des PDFs sont deposes dans le dossier surveille.
+            </p>
+        </field>
+    </record>
+</odoo>

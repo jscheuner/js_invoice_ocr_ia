@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # Part of js_invoice_ocr_ia. See LICENSE file for full copyright and licensing details.
 
+import os
 from unittest.mock import patch, MagicMock, call
 import requests
 from odoo.tests import TransactionCase
@@ -604,3 +605,317 @@ class TestJsocrConfig(TransactionCase):
         config = self.JsocrConfig.get_config()
         self.assertEqual(config.alert_amount_threshold, 10000.0)
         self.assertFalse(config.alert_email)
+
+    # -------------------------------------------------------------------------
+    # TEST: Folder Scanning (Story 3.4)
+    # -------------------------------------------------------------------------
+
+    def test_scan_input_folder_no_config(self):
+        """Test: scan_input_folder returns 0 when watch folder not configured"""
+        # Get config and clear watch folder
+        config = self.JsocrConfig.get_config()
+        config.write({'watch_folder_path': False})
+
+        result = self.JsocrConfig.scan_input_folder()
+
+        self.assertEqual(result, 0)
+
+    def test_scan_input_folder_empty_folder(self):
+        """Test: scan_input_folder returns 0 for empty folder"""
+        import tempfile
+        import os
+
+        # Create a temporary empty directory
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = self.JsocrConfig.get_config()
+            config.write({'watch_folder_path': temp_dir})
+
+            result = self.JsocrConfig.scan_input_folder()
+
+            self.assertEqual(result, 0)
+
+    def test_scan_input_folder_with_pdf(self):
+        """Test: scan_input_folder creates job for PDF file"""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create a test PDF file (minimal valid PDF)
+            pdf_path = os.path.join(temp_dir, 'test_invoice.pdf')
+            # Minimal PDF content
+            pdf_content = b'%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R>>endobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000052 00000 n \n0000000101 00000 n \ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n178\n%%EOF'
+
+            with open(pdf_path, 'wb') as f:
+                f.write(pdf_content)
+
+            config = self.JsocrConfig.get_config()
+            config.write({'watch_folder_path': temp_dir})
+
+            # Count jobs before
+            jobs_before = self.env['jsocr.import.job'].search_count([])
+
+            result = self.JsocrConfig.scan_input_folder()
+
+            # Count jobs after
+            jobs_after = self.env['jsocr.import.job'].search_count([])
+
+            self.assertEqual(result, 1)
+            self.assertEqual(jobs_after, jobs_before + 1)
+
+            # Verify job was created correctly
+            job = self.env['jsocr.import.job'].search([], order='id desc', limit=1)
+            self.assertEqual(job.pdf_filename, 'test_invoice.pdf')
+            self.assertEqual(job.state, 'pending')
+            self.assertTrue(job.pdf_file)
+
+            # Verify file was removed from watch folder
+            self.assertFalse(os.path.exists(pdf_path))
+
+    def test_scan_input_folder_ignores_non_pdf(self):
+        """Test: scan_input_folder ignores non-PDF files"""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create non-PDF files
+            txt_path = os.path.join(temp_dir, 'document.txt')
+            with open(txt_path, 'w') as f:
+                f.write('This is a text file')
+
+            doc_path = os.path.join(temp_dir, 'document.docx')
+            with open(doc_path, 'wb') as f:
+                f.write(b'fake docx content')
+
+            config = self.JsocrConfig.get_config()
+            config.write({'watch_folder_path': temp_dir})
+
+            jobs_before = self.env['jsocr.import.job'].search_count([])
+
+            result = self.JsocrConfig.scan_input_folder()
+
+            jobs_after = self.env['jsocr.import.job'].search_count([])
+
+            self.assertEqual(result, 0)
+            self.assertEqual(jobs_after, jobs_before)
+
+            # Files should still exist (not processed)
+            self.assertTrue(os.path.exists(txt_path))
+            self.assertTrue(os.path.exists(doc_path))
+
+    def test_scan_input_folder_multiple_pdfs(self):
+        """Test: scan_input_folder processes multiple PDF files"""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            pdf_content = b'%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R>>endobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000052 00000 n \n0000000101 00000 n \ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n178\n%%EOF'
+
+            # Create 3 PDF files
+            for i in range(3):
+                pdf_path = os.path.join(temp_dir, f'invoice_{i}.pdf')
+                with open(pdf_path, 'wb') as f:
+                    f.write(pdf_content)
+
+            config = self.JsocrConfig.get_config()
+            config.write({'watch_folder_path': temp_dir})
+
+            jobs_before = self.env['jsocr.import.job'].search_count([])
+
+            result = self.JsocrConfig.scan_input_folder()
+
+            jobs_after = self.env['jsocr.import.job'].search_count([])
+
+            self.assertEqual(result, 3)
+            self.assertEqual(jobs_after, jobs_before + 3)
+
+    def test_scan_input_folder_nonexistent_folder(self):
+        """Test: scan_input_folder handles nonexistent folder gracefully"""
+        config = self.JsocrConfig.get_config()
+        config.write({'watch_folder_path': '/nonexistent/path/that/does/not/exist'})
+
+        # Should not raise, just return 0
+        result = self.JsocrConfig.scan_input_folder()
+
+        self.assertEqual(result, 0)
+
+    # -------------------------------------------------------------------------
+    # TEST: Non-PDF File Rejection (Story 3.5)
+    # -------------------------------------------------------------------------
+
+    def test_non_pdf_detected_and_rejected(self):
+        """Test: non-PDF file is moved to rejected folder"""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            watch_path = os.path.join(temp_dir, 'watch')
+            rejected_path = os.path.join(temp_dir, 'rejected')
+            os.makedirs(watch_path)
+            os.makedirs(rejected_path)
+
+            # Create a non-PDF file in watch folder
+            txt_path = os.path.join(watch_path, 'document.txt')
+            with open(txt_path, 'w') as f:
+                f.write('This is not a PDF')
+
+            config = self.JsocrConfig.get_config()
+            config.write({
+                'watch_folder_path': watch_path,
+                'rejected_folder_path': rejected_path,
+                'alert_email': False,
+            })
+
+            self.JsocrConfig.scan_input_folder()
+
+            # File should be removed from watch folder
+            self.assertFalse(os.path.exists(txt_path))
+
+            # File should exist in rejected folder
+            rejected_file = os.path.join(rejected_path, 'document.txt')
+            self.assertTrue(os.path.exists(rejected_file))
+
+    def test_duplicate_filename_with_timestamp(self):
+        """Test: duplicate filename gets timestamp prefix"""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            watch_path = os.path.join(temp_dir, 'watch')
+            rejected_path = os.path.join(temp_dir, 'rejected')
+            os.makedirs(watch_path)
+            os.makedirs(rejected_path)
+
+            # Create a file already in rejected folder
+            existing_file = os.path.join(rejected_path, 'document.txt')
+            with open(existing_file, 'w') as f:
+                f.write('Existing rejected file')
+
+            # Create a file with same name in watch folder
+            new_file = os.path.join(watch_path, 'document.txt')
+            with open(new_file, 'w') as f:
+                f.write('New file to reject')
+
+            config = self.JsocrConfig.get_config()
+            config.write({
+                'watch_folder_path': watch_path,
+                'rejected_folder_path': rejected_path,
+                'alert_email': False,
+            })
+
+            self.JsocrConfig.scan_input_folder()
+
+            # Original file should still exist
+            self.assertTrue(os.path.exists(existing_file))
+
+            # New file should be removed from watch
+            self.assertFalse(os.path.exists(new_file))
+
+            # Check that a timestamped file was created in rejected folder
+            rejected_files = os.listdir(rejected_path)
+            self.assertEqual(len(rejected_files), 2)
+
+            # One of the files should have timestamp prefix (format: YYYYMMDD_HHMMSS_document.txt)
+            timestamped_files = [f for f in rejected_files if '_document.txt' in f]
+            self.assertEqual(len(timestamped_files), 1)
+
+            # Verify timestamp format (YYYYMMDD_HHMMSS_)
+            timestamped_name = timestamped_files[0]
+            self.assertRegex(timestamped_name, r'^\d{8}_\d{6}_document\.txt$')
+
+    @patch('js_invoice_ocr_ia.models.jsocr_config._logger')
+    def test_alert_email_sent_on_rejection(self, mock_logger):
+        """Test: email alert sent when non-PDF file is rejected"""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            watch_path = os.path.join(temp_dir, 'watch')
+            rejected_path = os.path.join(temp_dir, 'rejected')
+            os.makedirs(watch_path)
+            os.makedirs(rejected_path)
+
+            # Create a non-PDF file
+            txt_path = os.path.join(watch_path, 'malicious.exe')
+            with open(txt_path, 'w') as f:
+                f.write('fake executable')
+
+            config = self.JsocrConfig.get_config()
+            config.write({
+                'watch_folder_path': watch_path,
+                'rejected_folder_path': rejected_path,
+                'alert_email': 'admin@example.com',
+            })
+
+            # Count mail records before
+            mails_before = self.env['mail.mail'].search_count([])
+
+            self.JsocrConfig.scan_input_folder()
+
+            # Count mail records after
+            mails_after = self.env['mail.mail'].search_count([])
+
+            # A mail should have been created
+            self.assertEqual(mails_after, mails_before + 1)
+
+            # Check the mail content
+            mail = self.env['mail.mail'].search([], order='id desc', limit=1)
+            self.assertEqual(mail.email_to, 'admin@example.com')
+            self.assertIn('JSOCR', mail.subject)
+            self.assertIn('malicious.exe', mail.body_html)
+
+    def test_no_email_if_not_configured(self):
+        """Test: no email sent when alert_email is not configured"""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            watch_path = os.path.join(temp_dir, 'watch')
+            rejected_path = os.path.join(temp_dir, 'rejected')
+            os.makedirs(watch_path)
+            os.makedirs(rejected_path)
+
+            # Create a non-PDF file
+            txt_path = os.path.join(watch_path, 'document.txt')
+            with open(txt_path, 'w') as f:
+                f.write('text content')
+
+            config = self.JsocrConfig.get_config()
+            config.write({
+                'watch_folder_path': watch_path,
+                'rejected_folder_path': rejected_path,
+                'alert_email': False,  # No email configured
+            })
+
+            # Count mail records before
+            mails_before = self.env['mail.mail'].search_count([])
+
+            self.JsocrConfig.scan_input_folder()
+
+            # Count mail records after
+            mails_after = self.env['mail.mail'].search_count([])
+
+            # No mail should have been created
+            self.assertEqual(mails_after, mails_before)
+
+    @patch('js_invoice_ocr_ia.models.jsocr_config._logger')
+    def test_rejection_logging(self, mock_logger):
+        """Test: rejection is logged with JSOCR prefix"""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            watch_path = os.path.join(temp_dir, 'watch')
+            rejected_path = os.path.join(temp_dir, 'rejected')
+            os.makedirs(watch_path)
+            os.makedirs(rejected_path)
+
+            # Create a non-PDF file
+            txt_path = os.path.join(watch_path, 'report.docx')
+            with open(txt_path, 'w') as f:
+                f.write('docx content')
+
+            config = self.JsocrConfig.get_config()
+            config.write({
+                'watch_folder_path': watch_path,
+                'rejected_folder_path': rejected_path,
+                'alert_email': False,
+            })
+
+            self.JsocrConfig.scan_input_folder()
+
+            # Verify logging call with JSOCR prefix
+            mock_logger.info.assert_any_call(
+                "JSOCR: Rejected non-PDF file: %s", "report.docx"
+            )

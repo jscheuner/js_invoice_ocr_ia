@@ -481,3 +481,250 @@ class TestJsocrImportJob(TransactionCase):
         job.action_mark_failed()
         self.assertEqual(job.state, 'failed')
         self.assertTrue(job.is_final_state)
+
+    # -------------------------------------------------------------------------
+    # TEST: OCR Text Extraction Integration (Story 3.1)
+    # -------------------------------------------------------------------------
+
+    def test_extract_text_missing_pdf(self):
+        """Test: _extract_text raises error when PDF is missing"""
+        job = self._create_job()
+        job.pdf_file = False
+
+        with self.assertRaises(UserError) as ctx:
+            job._extract_text()
+
+        self.assertIn('PDF file is missing', str(ctx.exception))
+
+    def test_extract_text_invalid_pdf(self):
+        """Test: _extract_text raises error for invalid PDF"""
+        # Create job with invalid PDF content
+        job = self._create_job()
+        job.pdf_file = base64.b64encode(b'This is not a PDF')
+
+        with self.assertRaises(UserError) as ctx:
+            job._extract_text()
+
+        self.assertIn('extraction failed', str(ctx.exception).lower())
+
+    # -------------------------------------------------------------------------
+    # TEST: Language Detection Field (Story 3.3)
+    # -------------------------------------------------------------------------
+
+    def test_detected_language_default_value(self):
+        """Test: detected_language defaults to 'fr'"""
+        job = self._create_job()
+
+        self.assertEqual(job.detected_language, 'fr')
+
+    def test_detected_language_field_exists(self):
+        """Test: detected_language field is a Selection with valid values"""
+        job = self._create_job()
+
+        # Field should exist and have valid selection values
+        field = self.Job._fields.get('detected_language')
+        self.assertIsNotNone(field)
+        self.assertEqual(field.type, 'selection')
+
+        # Check allowed values
+        selection_values = [v[0] for v in field.selection]
+        self.assertIn('fr', selection_values)
+        self.assertIn('de', selection_values)
+        self.assertIn('en', selection_values)
+
+    # -------------------------------------------------------------------------
+    # TEST: PDF File Movement to Success Folder (Story 3.6)
+    # -------------------------------------------------------------------------
+
+    def test_pdf_moved_to_success_on_done(self):
+        """Test: PDF is moved to success folder when job is marked done"""
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            success_path = os.path.join(temp_dir, 'success')
+            os.makedirs(success_path)
+
+            # Configure success folder
+            config = self.env['jsocr.config'].get_config()
+            config.write({'success_folder_path': success_path})
+
+            # Create and process job
+            job = self._create_job(pdf_filename='invoice_test.pdf')
+            job.action_submit()
+            job.action_process()
+            job.action_mark_done()
+
+            # Check file exists in success folder
+            files = os.listdir(success_path)
+            self.assertEqual(len(files), 1)
+            self.assertIn('invoice_test.pdf', files[0])
+
+    def test_success_filename_has_timestamp(self):
+        """Test: success filename has timestamp prefix YYYYMMDD_HHMMSS_"""
+        import os
+        import re
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            success_path = os.path.join(temp_dir, 'success')
+            os.makedirs(success_path)
+
+            config = self.env['jsocr.config'].get_config()
+            config.write({'success_folder_path': success_path})
+
+            job = self._create_job(pdf_filename='facture.pdf')
+            job.action_submit()
+            job.action_process()
+            job.action_mark_done()
+
+            files = os.listdir(success_path)
+            self.assertEqual(len(files), 1)
+
+            # Verify timestamp format: YYYYMMDD_HHMMSS_facture.pdf
+            filename = files[0]
+            self.assertRegex(filename, r'^\d{8}_\d{6}_facture\.pdf$')
+
+    def test_success_file_content_preserved(self):
+        """Test: PDF content is preserved in success folder"""
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            success_path = os.path.join(temp_dir, 'success')
+            os.makedirs(success_path)
+
+            config = self.env['jsocr.config'].get_config()
+            config.write({'success_folder_path': success_path})
+
+            # Create job with known content
+            pdf_content = b'%PDF-1.4 test content for verification'
+            job = self._create_job(
+                pdf_filename='content_test.pdf',
+                pdf_file=base64.b64encode(pdf_content)
+            )
+            job.action_submit()
+            job.action_process()
+            job.action_mark_done()
+
+            # Read file content from success folder
+            files = os.listdir(success_path)
+            with open(os.path.join(success_path, files[0]), 'rb') as f:
+                saved_content = f.read()
+
+            self.assertEqual(saved_content, pdf_content)
+
+    # -------------------------------------------------------------------------
+    # TEST: PDF File Movement to Error Folder (Story 3.7)
+    # -------------------------------------------------------------------------
+
+    def test_pdf_moved_to_error_on_failed(self):
+        """Test: PDF is moved to error folder when job is marked failed"""
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            error_path = os.path.join(temp_dir, 'error')
+            os.makedirs(error_path)
+
+            config = self.env['jsocr.config'].get_config()
+            config.write({
+                'error_folder_path': error_path,
+                'alert_email': False,
+            })
+
+            job = self._create_job(pdf_filename='failed_invoice.pdf')
+            job.action_submit()
+            job.action_process()
+            job.action_mark_error('Processing failed')
+            job.action_mark_failed()
+
+            files = os.listdir(error_path)
+            self.assertEqual(len(files), 1)
+            self.assertIn('failed_invoice.pdf', files[0])
+
+    def test_error_filename_has_timestamp(self):
+        """Test: error filename has timestamp prefix YYYYMMDD_HHMMSS_"""
+        import os
+        import re
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            error_path = os.path.join(temp_dir, 'error')
+            os.makedirs(error_path)
+
+            config = self.env['jsocr.config'].get_config()
+            config.write({
+                'error_folder_path': error_path,
+                'alert_email': False,
+            })
+
+            job = self._create_job(pdf_filename='erreur.pdf')
+            job.action_submit()
+            job.action_process()
+            job.action_mark_error('Error')
+            job.action_mark_failed()
+
+            files = os.listdir(error_path)
+            self.assertEqual(len(files), 1)
+
+            # Verify timestamp format
+            filename = files[0]
+            self.assertRegex(filename, r'^\d{8}_\d{6}_erreur\.pdf$')
+
+    def test_failure_alert_email_sent(self):
+        """Test: email alert sent when job is marked failed and alert_email configured"""
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            error_path = os.path.join(temp_dir, 'error')
+            os.makedirs(error_path)
+
+            config = self.env['jsocr.config'].get_config()
+            config.write({
+                'error_folder_path': error_path,
+                'alert_email': 'admin@example.com',
+            })
+
+            mails_before = self.env['mail.mail'].search_count([])
+
+            job = self._create_job(pdf_filename='alert_test.pdf')
+            job.action_submit()
+            job.action_process()
+            job.action_mark_error('Critical failure')
+            job.action_mark_failed()
+
+            mails_after = self.env['mail.mail'].search_count([])
+            self.assertEqual(mails_after, mails_before + 1)
+
+            mail = self.env['mail.mail'].search([], order='id desc', limit=1)
+            self.assertEqual(mail.email_to, 'admin@example.com')
+            self.assertIn('alert_test.pdf', mail.subject)
+            self.assertIn('Critical failure', mail.body_html)
+
+    def test_no_failure_email_if_not_configured(self):
+        """Test: no email sent when alert_email is not configured"""
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            error_path = os.path.join(temp_dir, 'error')
+            os.makedirs(error_path)
+
+            config = self.env['jsocr.config'].get_config()
+            config.write({
+                'error_folder_path': error_path,
+                'alert_email': False,
+            })
+
+            mails_before = self.env['mail.mail'].search_count([])
+
+            job = self._create_job(pdf_filename='no_alert.pdf')
+            job.action_submit()
+            job.action_process()
+            job.action_mark_error('Some error')
+            job.action_mark_failed()
+
+            mails_after = self.env['mail.mail'].search_count([])
+            self.assertEqual(mails_after, mails_before)

@@ -68,14 +68,14 @@ development_status:
   # ============================================
   # Epic 3: Ingestion PDF & OCR (7 stories)
   # ============================================
-  epic-3: backlog
-  3-1-service-ocr-extraction-pdf-natif: backlog
-  3-2-service-ocr-extraction-pdf-scanne: backlog
-  3-3-detection-automatique-langue: backlog
-  3-4-cron-job-surveillance-dossier: backlog
-  3-5-gestion-fichiers-non-pdf: backlog
-  3-6-deplacement-fichiers-succes: backlog
-  3-7-deplacement-fichiers-erreur: backlog
+  epic-3: done
+  3-1-service-ocr-extraction-pdf-natif: done
+  3-2-service-ocr-extraction-pdf-scanne: done
+  3-3-detection-automatique-langue: done
+  3-4-cron-job-surveillance-dossier: done
+  3-5-gestion-fichiers-non-pdf: done
+  3-6-deplacement-fichiers-succes: done
+  3-7-deplacement-fichiers-erreur: done
   epic-3-retrospective: optional
 
   # ============================================

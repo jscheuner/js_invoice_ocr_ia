@@ -7,6 +7,13 @@
               groups="js_invoice_ocr_ia.group_jsocr_user"
               web_icon="js_invoice_ocr_ia,static/description/icon.png"/>
 
+    <!-- Import Jobs menu item -->
+    <menuitem id="menu_jsocr_import_jobs"
+              name="Import Jobs"
+              parent="menu_jsocr_root"
+              action="jsocr_import_job_action"
+              sequence="5"/>
+
     <!-- Configuration submenu -->
     <menuitem id="menu_jsocr_configuration"
               name="Configuration"
