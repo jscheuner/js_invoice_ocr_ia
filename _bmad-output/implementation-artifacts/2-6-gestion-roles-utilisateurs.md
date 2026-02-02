@@ -87,6 +87,19 @@ So that **chacun ait les droits appropriés** (FR41).
   - [x] Vérifier que tous les tests passent
   - [x] Confirmer que les groupes sont visibles et fonctionnels dans l'interface
 
+### Review Follow-ups (AI Code Review - 2026-02-02)
+
+- [ ] **[AI-Review][HIGH]** AC3 NOT FULLY IMPLEMENTED - No Evidence of Immediate Rights Application. Ajouter test d'intégration vérifiant qu'un utilisateur voit les menus après assignation de groupe sans logout/login. [test_security.py]
+- [ ] **[AI-Review][HIGH]** Missing Test Import - Corriger l'import dans tests/__init__.py:11 de `test_jsocr_security` vers `test_security` pour que les tests soient exécutés. [tests/__init__.py:11]
+- [ ] **[AI-Review][HIGH]** Test Module Missing @tagged Decorator - Ajouter `@tagged('post_install', '-at_install', 'jsocr', 'jsocr_security')` à la classe TestJsocrSecurity. [test_security.py:8]
+- [ ] **[AI-Review][HIGH]** Incomplete Test Coverage for Manager Permissions - Ajouter tests vérifiant que manager peut write/create/delete jsocr.import.job selon AC2. [test_security.py]
+- [ ] **[AI-Review][HIGH]** Security Group XML Wrong noupdate Setting - Changer `<data noupdate="1">` en `<data noupdate="0">` pour permettre mises à jour futures des groupes. [jsocr_security.xml:3]
+- [ ] **[AI-Review][HIGH]** Missing Record Rule Tests - Implémenter record rules pour "ses propres factures" (user) vs "toutes les factures" (manager) selon FR42/FR43 et ajouter tests. [test_security.py + security/]
+- [ ] **[AI-Review][MEDIUM]** Inconsistent Test Naming - Renommer test_security.py en test_jsocr_security.py pour suivre convention du projet. [test_security.py]
+- [ ] **[AI-Review][MEDIUM]** Test Teardown Missing - Utiliser setUpClass/tearDownClass ou proper transaction rollback au lieu de inline unlink() pour éviter test pollution. [test_security.py:11]
+- [ ] **[AI-Review][LOW]** Missing Detailed Test Docstrings - Améliorer docstrings des tests avec pattern Given/When/Then. [test_security.py]
+- [ ] **[AI-Review][LOW]** Test Coverage Documentation Mismatch - Mettre à jour Dev Notes ligne 213: "Minimum 6 tests" → "7 tests" pour refléter implémentation. [2-6-gestion-roles-utilisateurs.md:213]
+
 ## Dev Notes
 
 ### Context from Previous Stories
