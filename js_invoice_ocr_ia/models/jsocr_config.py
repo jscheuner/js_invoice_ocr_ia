@@ -38,7 +38,7 @@ class JsocrConfig(models.Model):
         selection='_get_ollama_models',
         string='Ollama Model',
         default='llama3',
-        help='Nom du modele IA à utiliser (ex: llama3, mistral)'
+        help='Nom du modele IA a utiliser (ex: llama3, mistral)'
     )
 
     ollama_timeout = fields.Integer(
@@ -52,7 +52,7 @@ class JsocrConfig(models.Model):
         string='Watch Folder',
         default='/opt/odoo/ocr_input',
         required=True,
-        help='Chemin du dossier à surveiller pour nouveaux PDFs'
+        help='Chemin du dossier a surveiller pour nouveaux PDFs'
     )
 
     success_folder_path = fields.Char(
@@ -73,7 +73,7 @@ class JsocrConfig(models.Model):
         string='Rejected Folder',
         default='/opt/odoo/ocr_rejected',
         required=True,
-        help='Chemin du dossier pour fichiers non-PDF rejetés'
+        help='Chemin du dossier pour fichiers non-PDF rejetes'
     )
 
     # Alertes et notifications
@@ -115,7 +115,7 @@ class JsocrConfig(models.Model):
         for record in self:
             if record.alert_amount_threshold is not None and record.alert_amount_threshold <= 0:
                 raise ValidationError(
-                    "Le seuil d'alerte doit être un montant positif (> 0)."
+                    "Le seuil d'alerte doit etre un montant positif (> 0)."
                 )
 
     @api.constrains('alert_email')
@@ -136,7 +136,7 @@ class JsocrConfig(models.Model):
                 'watch_folder_path': 'Dossier surveille',
                 'success_folder_path': 'Dossier succes',
                 'error_folder_path': 'Dossier erreur',
-                'rejected_folder_path': 'Dossier rejeté',
+                'rejected_folder_path': 'Dossier rejete',
             }
 
             for field_name, field_label in folder_fields.items():
@@ -152,14 +152,14 @@ class JsocrConfig(models.Model):
                         f"Erreur: {str(e)}"
                     )
 
-                # Vérifier chemin absolu
+                # Verifier chemin absolu
                 if not path.is_absolute():
                     raise ValidationError(
-                        f"{field_label}: Le chemin doit être absolu. "
+                        f"{field_label}: Le chemin doit etre absolu. "
                         f"Valeur actuelle: {path_str}"
                     )
 
-                # Vérifier existence du parent
+                # Verifier existence du parent
                 parent = path.parent
                 if not parent.exists():
                     raise ValidationError(
@@ -167,17 +167,17 @@ class JsocrConfig(models.Model):
                         f"Parent attendu: {parent}"
                     )
 
-                # Vérifier permissions
+                # Verifier permissions
                 if not os.access(str(parent), os.R_OK | os.W_OK):
                     raise ValidationError(
-                        f"{field_label}: Permissions insuffisantes (lecture/écriture requises). "
+                        f"{field_label}: Permissions insuffisantes (lecture/ecriture requises). "
                         f"Chemin: {path_str}"
                     )
 
     @api.model
     @tools.ormcache()
     def get_config(self):
-        """Retourne l'enregistrement de configuration unique (le cree si nécessaire)
+        """Retourne l'enregistrement de configuration unique (le cree si necessaire)
 
         Uses sudo() to ensure creation works even for users without create rights.
         Result is cached via @tools.ormcache for performance.
@@ -199,17 +199,17 @@ class JsocrConfig(models.Model):
     def _get_ollama_models(self):
         """Retourne la liste des modeles disponibles pour le champ Selection.
 
-        Cette méthode peut être appelée par Odoo meme si self est vide ou non initialise.
-        Elle recupere automatiquement le config singleton si nécessaire.
+        Cette methode peut etre appelee par Odoo meme si self est vide ou non initialise.
+        Elle recupere automatiquement le config singleton si necessaire.
 
         Called automatically by Odoo when rendering the Selection field.
         Fetches available models from Ollama API and formats them for the dropdown.
 
         Returns:
             list: Liste de tuples (value, label) pour le champ Selection.
-                  Retourne au moins le modele par défaut si aucun modele disponible.
+                  Retourne au moins le modele par defaut si aucun modele disponible.
         """
-        # Récupérer le config singleton pour avoir accès à ollama_url
+        # Recuperer le config singleton pour avoir acces a ollama_url
         # Ceci fonctionne meme si self est vide ou pas encore cree
         if self:
             config = self
@@ -217,19 +217,19 @@ class JsocrConfig(models.Model):
             # Si self est vide, rechercher le singleton existant
             config = self.env['jsocr.config'].sudo().search([], limit=1)
             if not config:
-                # Aucun config n'existe encore, retourner le défaut
-                return [('llama3', 'llama3 (défaut)')]
+                # Aucun config n'existe encore, retourner le defaut
+                return [('llama3', 'llama3 (defaut)')]
 
-        # Récupérer les modeles disponibles
+        # Recuperer les modeles disponibles
         models = config._fetch_available_models()
         if not models:
-            # Fallback: retourner au moins le modele par défaut
-            return [('llama3', 'llama3 (défaut)')]
+            # Fallback: retourner au moins le modele par defaut
+            return [('llama3', 'llama3 (defaut)')]
 
         return [(model, model) for model in models]
 
     def _fetch_available_models(self):
-        """Récupère les modeles disponibles depuis Ollama API.
+        """Recupere les modeles disponibles depuis Ollama API.
 
         Calls GET /api/tags endpoint silently (no user errors raised).
         Used to populate the Selection field dropdown.
@@ -280,7 +280,7 @@ class JsocrConfig(models.Model):
         self.ensure_one()  # Singleton pattern
 
         if not self.ollama_url:
-            raise UserError("L'URL Ollama n'est pas configurée")
+            raise UserError("L'URL Ollama n'est pas configuree")
 
         _logger.info("JSOCR: Testing Ollama connection")
 
@@ -295,7 +295,7 @@ class JsocrConfig(models.Model):
                 models = [m['name'] for m in data.get('models', [])]
 
                 if models:
-                    message = f"Connexion OK - Modèles disponibles: {', '.join(models)}"
+                    message = f"Connexion OK - Modeles disponibles: {', '.join(models)}"
                 else:
                     message = "Connexion OK - Aucun modele disponible"
 
@@ -305,7 +305,7 @@ class JsocrConfig(models.Model):
                     'type': 'ir.actions.client',
                     'tag': 'display_notification',
                     'params': {
-                        'title': 'Succès',
+                        'title': 'Succes',
                         'message': message,
                         'type': 'success',
                         'sticky': False,
@@ -317,7 +317,7 @@ class JsocrConfig(models.Model):
                 raise UserError(error_msg)
 
         except requests.Timeout:
-            error_msg = "Erreur de connexion: Timeout après 10s"
+            error_msg = "Erreur de connexion: Timeout apres 10s"
             _logger.warning("JSOCR: Ollama connection timeout")
             raise UserError(error_msg)
 
@@ -327,10 +327,10 @@ class JsocrConfig(models.Model):
             raise UserError(error_msg)
 
         except ValueError:
-            error_msg = "Erreur: Réponse JSON invalide du serveur Ollama"
+            error_msg = "Erreur: Reponse JSON invalide du serveur Ollama"
             _logger.error("JSOCR: Invalid JSON response from Ollama")
             raise UserError(error_msg)
         except KeyError:
-            error_msg = "Erreur: Structure de réponse invalide du serveur Ollama"
+            error_msg = "Erreur: Structure de reponse invalide du serveur Ollama"
             _logger.error("JSOCR: Invalid response structure from Ollama")
             raise UserError(error_msg)
