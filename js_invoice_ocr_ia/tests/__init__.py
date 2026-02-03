@@ -12,4 +12,4 @@ from . import test_jsocr_security
 from . import test_jsocr_config_views
 from . import test_jsocr_config_folder_validation
 from . import test_ocr_service
-# from . import test_ai_service
+from . import test_ai_service

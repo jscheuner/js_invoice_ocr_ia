@@ -81,22 +81,22 @@ development_status:
   # ============================================
   # Epic 4: Analyse IA & Création Factures (15 stories)
   # ============================================
-  epic-4: backlog
-  4-1-service-ollama-connexion-requete: backlog
-  4-2-prompt-extraction-structuree: backlog
-  4-3-extraction-fournisseur: backlog
-  4-4-extraction-date-numero-facture: backlog
-  4-5-extraction-lignes-facture: backlog
-  4-6-extraction-montants: backlog
-  4-7-calcul-indices-confiance: backlog
-  4-8-creation-facture-brouillon: backlog
-  4-9-pre-remplissage-lignes-facture: backlog
-  4-10-attachement-pdf-source: backlog
-  4-11-traitement-asynchrone-queue-job: backlog
-  4-12-gestion-erreurs-retry: backlog
-  4-13-vue-liste-jobs: backlog
-  4-14-affichage-statut-job: backlog
-  4-15-notification-factures-pretes: backlog
+  epic-4: done
+  4-1-service-ollama-connexion-requete: done
+  4-2-prompt-extraction-structuree: done
+  4-3-extraction-fournisseur: done
+  4-4-extraction-date-numero-facture: done
+  4-5-extraction-lignes-facture: done
+  4-6-extraction-montants: done
+  4-7-calcul-indices-confiance: done
+  4-8-creation-facture-brouillon: done
+  4-9-pre-remplissage-lignes-facture: done
+  4-10-attachement-pdf-source: done
+  4-11-traitement-asynchrone-queue-job: done
+  4-12-gestion-erreurs-retry: done
+  4-13-vue-liste-jobs: done
+  4-14-affichage-statut-job: done
+  4-15-notification-factures-pretes: done
   epic-4-retrospective: optional
 
   # ============================================

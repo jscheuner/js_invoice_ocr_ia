@@ -7,22 +7,43 @@
               groups="js_invoice_ocr_ia.group_jsocr_user"
               web_icon="js_invoice_ocr_ia,static/description/icon.png"/>
 
-    <!-- Import Jobs menu item -->
-    <menuitem id="menu_jsocr_import_jobs"
-              name="Import Jobs"
+    <!-- Import Jobs submenu (Story 4.13) -->
+    <menuitem id="menu_jsocr_jobs"
+              name="Jobs d'import"
               parent="menu_jsocr_root"
-              action="jsocr_import_job_action"
               sequence="5"/>
+
+    <!-- All jobs -->
+    <menuitem id="menu_jsocr_import_jobs"
+              name="Tous les jobs"
+              parent="menu_jsocr_jobs"
+              action="jsocr_import_job_action"
+              sequence="10"/>
+
+    <!-- Pending jobs -->
+    <menuitem id="menu_jsocr_import_jobs_pending"
+              name="En attente"
+              parent="menu_jsocr_jobs"
+              action="jsocr_import_job_action_pending"
+              sequence="20"/>
+
+    <!-- Error jobs -->
+    <menuitem id="menu_jsocr_import_jobs_errors"
+              name="En erreur"
+              parent="menu_jsocr_jobs"
+              action="jsocr_import_job_action_errors"
+              sequence="30"/>
 
     <!-- Configuration submenu -->
     <menuitem id="menu_jsocr_configuration"
               name="Configuration"
               parent="menu_jsocr_root"
-              sequence="10"/>
+              groups="js_invoice_ocr_ia.group_jsocr_admin"
+              sequence="90"/>
 
     <!-- System configuration menu item -->
     <menuitem id="menu_jsocr_config"
-              name="Paramètres Système"
+              name="Parametres Systeme"
               parent="menu_jsocr_configuration"
               action="jsocr_config_action"
               groups="js_invoice_ocr_ia.group_jsocr_admin"

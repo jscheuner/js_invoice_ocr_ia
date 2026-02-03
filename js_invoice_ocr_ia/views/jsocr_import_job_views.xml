@@ -1,18 +1,85 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- List view for jsocr.import.job -->
+    <!-- List view for jsocr.import.job (Story 4.13 - FR33) -->
     <record id="jsocr_import_job_view_list" model="ir.ui.view">
         <field name="name">jsocr.import.job.view.list</field>
         <field name="model">jsocr.import.job</field>
         <field name="arch" type="xml">
-            <list string="Import Jobs" decoration-success="state=='done'" decoration-danger="state in ('error','failed')" decoration-warning="state=='processing'">
+            <list string="Import Jobs"
+                  decoration-success="state=='done'"
+                  decoration-danger="state in ('error','failed')"
+                  decoration-warning="state=='processing'"
+                  decoration-muted="state=='draft'">
                 <field name="name"/>
                 <field name="pdf_filename"/>
-                <field name="state" widget="badge" decoration-success="state=='done'" decoration-danger="state in ('error','failed')" decoration-warning="state=='processing'" decoration-info="state=='pending'"/>
+                <field name="partner_id" string="Fournisseur"/>
+                <field name="state" widget="badge"
+                       decoration-success="state=='done'"
+                       decoration-danger="state in ('error','failed')"
+                       decoration-warning="state=='processing'"
+                       decoration-info="state=='pending'"
+                       decoration-muted="state=='draft'"/>
                 <field name="detected_language"/>
-                <field name="retry_count"/>
+                <field name="retry_count" string="Retries"/>
+                <field name="invoice_id" string="Facture"/>
                 <field name="create_date"/>
             </list>
+        </field>
+    </record>
+
+    <!-- Kanban view for jsocr.import.job (Story 4.14 - visual status) -->
+    <record id="jsocr_import_job_view_kanban" model="ir.ui.view">
+        <field name="name">jsocr.import.job.view.kanban</field>
+        <field name="model">jsocr.import.job</field>
+        <field name="arch" type="xml">
+            <kanban default_group_by="state" class="o_kanban_small_column">
+                <field name="id"/>
+                <field name="name"/>
+                <field name="pdf_filename"/>
+                <field name="state"/>
+                <field name="partner_id"/>
+                <field name="retry_count"/>
+                <field name="extracted_amount_total"/>
+                <field name="invoice_id"/>
+                <templates>
+                    <t t-name="card">
+                        <div class="oe_kanban_content">
+                            <div class="o_kanban_record_top">
+                                <strong class="o_kanban_record_title">
+                                    <field name="pdf_filename"/>
+                                </strong>
+                            </div>
+                            <div class="o_kanban_record_body">
+                                <div t-if="record.partner_id.value">
+                                    <span class="text-muted">Fournisseur: </span>
+                                    <field name="partner_id"/>
+                                </div>
+                                <div t-if="record.extracted_amount_total.raw_value > 0">
+                                    <span class="text-muted">Montant: </span>
+                                    <field name="extracted_amount_total" widget="monetary"/>
+                                </div>
+                                <div t-if="record.retry_count.raw_value > 0" class="text-warning">
+                                    <span class="badge bg-warning">
+                                        Retry <field name="retry_count"/>/<t t-out="3"/>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="o_kanban_record_bottom">
+                                <div class="oe_kanban_bottom_left">
+                                    <field name="state" widget="label_selection" options="{'classes': {'draft': 'secondary', 'pending': 'info', 'processing': 'warning', 'done': 'success', 'error': 'danger', 'failed': 'dark'}}"/>
+                                </div>
+                                <div class="oe_kanban_bottom_right">
+                                    <t t-if="record.invoice_id.value">
+                                        <span class="badge bg-success" title="Facture creee">
+                                            <i class="fa fa-file-text-o"/>
+                                        </span>
+                                    </t>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
         </field>
     </record>
 
@@ -23,20 +90,51 @@
         <field name="arch" type="xml">
             <form string="Import Job">
                 <header>
-                    <button name="action_submit" type="object" string="Soumettre" class="btn-primary" invisible="state != 'draft'"/>
-                    <button name="action_process" type="object" string="Traiter" class="btn-primary" invisible="state != 'pending'"/>
-                    <button name="action_extract_text" type="object" string="Extraire Texte (OCR)" class="btn-info" invisible="state != 'processing'"/>
-                    <button name="action_mark_done" type="object" string="Marquer termine" class="btn-success" invisible="state != 'processing'"/>
-                    <button name="action_mark_error" type="object" string="Marquer erreur" class="btn-warning" invisible="state != 'processing'"/>
-                    <button name="action_retry" type="object" string="Reessayer" class="btn-warning" invisible="state != 'error' or not can_retry"/>
-                    <button name="action_mark_failed" type="object" string="Marquer echec" class="btn-danger" invisible="state != 'error'"/>
-                    <button name="action_cancel" type="object" string="Annuler" invisible="state in ('done', 'failed')"/>
+                    <!-- State transition buttons -->
+                    <button name="action_submit" type="object" string="Soumettre"
+                            class="btn-primary" invisible="state != 'draft'"/>
+                    <button name="action_process" type="object" string="Demarrer"
+                            class="btn-primary" invisible="state != 'pending'"/>
+
+                    <!-- Processing action buttons -->
+                    <button name="action_extract_text" type="object" string="1. Extraire Texte (OCR)"
+                            class="btn-info" invisible="state != 'processing'"/>
+                    <button name="action_analyze_with_ai" type="object" string="2. Analyser (IA)"
+                            class="btn-info" invisible="state != 'processing' or not extracted_text"/>
+                    <button name="action_create_invoice" type="object" string="3. Creer Facture"
+                            class="btn-success" invisible="state != 'processing' or not ai_response or invoice_id"/>
+
+                    <!-- One-click full processing -->
+                    <button name="action_process_full" type="object" string="Traitement Complet"
+                            class="btn-primary" invisible="state not in ('pending', 'processing')"/>
+
+                    <!-- Status buttons -->
+                    <button name="action_mark_done" type="object" string="Marquer termine"
+                            class="btn-success" invisible="state != 'processing' or not invoice_id"/>
+                    <button name="action_retry" type="object" string="Reessayer"
+                            class="btn-warning" invisible="state != 'error' or not can_retry"/>
+                    <button name="action_mark_failed" type="object" string="Abandonner"
+                            class="btn-danger" invisible="state != 'error'"/>
+                    <button name="action_cancel" type="object" string="Annuler"
+                            invisible="state in ('done', 'failed')"/>
+
                     <field name="state" widget="statusbar" statusbar_visible="draft,pending,processing,done"/>
                 </header>
                 <sheet>
+                    <!-- Alert banners -->
+                    <div class="alert alert-danger" role="alert"
+                         invisible="state not in ('error', 'failed')">
+                        <strong>Erreur:</strong> <field name="error_message" readonly="1"/>
+                    </div>
+                    <div class="alert alert-warning" role="alert"
+                         invisible="retry_count == 0">
+                        <strong>Tentatives:</strong> <field name="retry_count" readonly="1"/> / 3
+                    </div>
+
                     <div class="oe_title">
                         <h1><field name="name" readonly="1"/></h1>
                     </div>
+
                     <group>
                         <group string="Fichier PDF">
                             <field name="pdf_filename" readonly="1"/>
@@ -44,18 +142,40 @@
                             <field name="detected_language" readonly="1"/>
                         </group>
                         <group string="Statut">
-                            <field name="retry_count" readonly="1"/>
+                            <field name="retry_count" readonly="1" invisible="1"/>
                             <field name="can_retry" invisible="1"/>
                             <field name="is_final_state" invisible="1"/>
                             <field name="invoice_id" readonly="1"/>
                         </group>
                     </group>
+
+                    <!-- Extracted Data Section (Story 4.3-4.6) -->
+                    <group string="Donnees extraites" invisible="not ai_response">
+                        <group>
+                            <field name="partner_id" readonly="1"/>
+                            <field name="extracted_supplier_name" readonly="1"/>
+                            <field name="extracted_invoice_date" readonly="1"/>
+                            <field name="extracted_invoice_number" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="extracted_amount_untaxed" readonly="1" widget="monetary"/>
+                            <field name="extracted_amount_tax" readonly="1" widget="monetary"/>
+                            <field name="extracted_amount_total" readonly="1" widget="monetary"/>
+                        </group>
+                    </group>
+
                     <notebook>
                         <page string="Texte extrait" name="extracted_text">
                             <field name="extracted_text" readonly="1"/>
                         </page>
-                        <page string="Reponse IA" name="ai_response">
-                            <field name="ai_response" readonly="1"/>
+                        <page string="Lignes extraites" name="extracted_lines" invisible="not extracted_lines">
+                            <field name="extracted_lines" readonly="1" widget="text"/>
+                        </page>
+                        <page string="Reponse IA" name="ai_response" invisible="not ai_response">
+                            <field name="ai_response" readonly="1" widget="text"/>
+                        </page>
+                        <page string="Confiance" name="confidence" invisible="not confidence_data">
+                            <field name="confidence_data" readonly="1" widget="text"/>
                         </page>
                         <page string="Erreur" name="error" invisible="not error_message">
                             <field name="error_message" readonly="1"/>
@@ -67,11 +187,43 @@
         </field>
     </record>
 
-    <!-- Action to open import jobs list -->
+    <!-- Search view for filtering (Story 4.13) -->
+    <record id="jsocr_import_job_view_search" model="ir.ui.view">
+        <field name="name">jsocr.import.job.view.search</field>
+        <field name="model">jsocr.import.job</field>
+        <field name="arch" type="xml">
+            <search string="Search Import Jobs">
+                <field name="name"/>
+                <field name="pdf_filename"/>
+                <field name="partner_id"/>
+                <field name="extracted_supplier_name"/>
+                <filter string="Brouillon" name="filter_draft" domain="[('state', '=', 'draft')]"/>
+                <filter string="En attente" name="filter_pending" domain="[('state', '=', 'pending')]"/>
+                <filter string="En cours" name="filter_processing" domain="[('state', '=', 'processing')]"/>
+                <filter string="Termine" name="filter_done" domain="[('state', '=', 'done')]"/>
+                <filter string="Erreur" name="filter_error" domain="[('state', 'in', ('error', 'failed'))]"/>
+                <separator/>
+                <filter string="Avec facture" name="filter_has_invoice" domain="[('invoice_id', '!=', False)]"/>
+                <filter string="Sans facture" name="filter_no_invoice" domain="[('invoice_id', '=', False)]"/>
+                <separator/>
+                <filter string="En retry" name="filter_retry" domain="[('retry_count', '>', 0)]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Statut" name="groupby_state" context="{'group_by': 'state'}"/>
+                    <filter string="Fournisseur" name="groupby_partner" context="{'group_by': 'partner_id'}"/>
+                    <filter string="Langue" name="groupby_language" context="{'group_by': 'detected_language'}"/>
+                    <filter string="Date creation" name="groupby_create_date" context="{'group_by': 'create_date:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action to open import jobs list (Story 4.13) -->
     <record id="jsocr_import_job_action" model="ir.actions.act_window">
-        <field name="name">Import Jobs</field>
+        <field name="name">Jobs d'import</field>
         <field name="res_model">jsocr.import.job</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="search_view_id" ref="jsocr_import_job_view_search"/>
+        <field name="context">{'search_default_filter_pending': 0, 'search_default_filter_processing': 0}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 Aucun job d'import
@@ -80,5 +232,23 @@
                 Les jobs sont crees automatiquement quand des PDFs sont deposes dans le dossier surveille.
             </p>
         </field>
+    </record>
+
+    <!-- Action for pending jobs only -->
+    <record id="jsocr_import_job_action_pending" model="ir.actions.act_window">
+        <field name="name">Jobs en attente</field>
+        <field name="res_model">jsocr.import.job</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="domain">[('state', 'in', ('pending', 'processing'))]</field>
+        <field name="search_view_id" ref="jsocr_import_job_view_search"/>
+    </record>
+
+    <!-- Action for jobs with errors -->
+    <record id="jsocr_import_job_action_errors" model="ir.actions.act_window">
+        <field name="name">Jobs en erreur</field>
+        <field name="res_model">jsocr.import.job</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('state', 'in', ('error', 'failed'))]</field>
+        <field name="search_view_id" ref="jsocr_import_job_view_search"/>
     </record>
 </odoo>

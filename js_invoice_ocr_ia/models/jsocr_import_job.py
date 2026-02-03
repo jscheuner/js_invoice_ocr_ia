@@ -2,6 +2,7 @@
 # Part of js_invoice_ocr_ia. See LICENSE file for full copyright and licensing details.
 
 import base64
+import json
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -110,11 +111,57 @@ class JsocrImportJob(models.Model):
         help='Link to the generated supplier invoice',
     )
 
+    partner_id = fields.Many2one(
+        comodel_name='res.partner',
+        string='Detected Supplier',
+        ondelete='set null',
+        help='Supplier detected from AI extraction',
+    )
+
     correction_ids = fields.One2many(
         comodel_name='jsocr.correction',
         inverse_name='import_job_id',
         string='Corrections',
         help='User corrections associated with this import job',
+    )
+
+    # Extracted data fields (Story 4.3-4.6)
+    extracted_supplier_name = fields.Char(
+        string='Extracted Supplier',
+        help='Supplier name extracted by AI',
+    )
+
+    extracted_invoice_date = fields.Date(
+        string='Extracted Date',
+        help='Invoice date extracted by AI',
+    )
+
+    extracted_invoice_number = fields.Char(
+        string='Extracted Invoice Number',
+        help='Invoice number (supplier reference) extracted by AI',
+    )
+
+    extracted_lines = fields.Text(
+        string='Extracted Lines (JSON)',
+        help='Invoice lines extracted by AI in JSON format',
+    )
+
+    extracted_amount_untaxed = fields.Float(
+        string='Extracted Amount Untaxed',
+        digits='Account',
+        help='Amount without tax extracted by AI',
+    )
+
+    extracted_amount_tax = fields.Float(
+        string='Extracted Tax Amount',
+        digits='Account',
+        help='Tax amount extracted by AI',
+    )
+
+    extracted_amount_total = fields.Float(
+        string='Extracted Total',
+        digits='Account',
+        help='Total amount extracted by AI',
     )
 
     # Retry management
@@ -583,3 +630,617 @@ class JsocrImportJob(models.Model):
             _logger.info("JSOCR: Job %s failure alert email sent", self.id)
         except Exception as e:
             _logger.error("JSOCR: Job %s failed to send alert email: %s", self.id, type(e).__name__)
+
+    # -------------------------------------------------------------------------
+    # AI ANALYSIS METHODS (Story 4.1-4.7)
+    # -------------------------------------------------------------------------
+
+    def action_analyze_with_ai(self):
+        """Analyze extracted text with AI to extract invoice data (button action).
+
+        Can be called from the UI when job is in 'processing' state and has extracted text.
+        Extracts structured data and stores in job fields.
+
+        Returns:
+            dict: Notification action with result message
+        """
+        self.ensure_one()
+
+        if self.state != 'processing':
+            raise UserError(
+                f"Cannot analyze job in state '{self.state}'. "
+                "Job must be in 'processing' state."
+            )
+
+        if not self.extracted_text:
+            raise UserError(
+                "Cannot analyze: no extracted text. "
+                "Please run OCR extraction first."
+            )
+
+        try:
+            result = self._analyze_with_ai()
+            if result.get('success'):
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': 'Analyse IA reussie',
+                        'message': f"Fournisseur detecte: {self.extracted_supplier_name or 'Non trouve'}",
+                        'type': 'success',
+                        'sticky': False,
+                    }
+                }
+            else:
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': 'Echec analyse IA',
+                        'message': result.get('error', 'Erreur inconnue'),
+                        'type': 'warning',
+                        'sticky': True,
+                    }
+                }
+        except Exception as e:
+            _logger.error("JSOCR: Job %s AI analysis failed: %s", self.id, str(e))
+            raise UserError(f"AI analysis failed: {str(e)}")
+
+    def _analyze_with_ai(self):
+        """Perform AI analysis on extracted text.
+
+        Uses OllamaService to extract structured invoice data.
+
+        Returns:
+            dict: Result with 'success' key and extracted data
+        """
+        self.ensure_one()
+
+        _logger.info("JSOCR: Job %s starting AI analysis", self.id)
+
+        # Get config
+        config = self.env['jsocr.config'].get_config()
+
+        # Initialize Ollama service
+        from odoo.addons.js_invoice_ocr_ia.services.ai_service import OllamaService
+
+        ollama = OllamaService(
+            url=config.ollama_url,
+            model=config.ollama_model,
+            timeout=config.ollama_timeout,
+        )
+
+        # Extract data
+        result = ollama.extract_invoice_data(
+            self.extracted_text,
+            language=self.detected_language or 'fr'
+        )
+
+        if not result.get('success'):
+            _logger.warning("JSOCR: Job %s AI extraction failed: %s", self.id, result.get('error'))
+            return result
+
+        data = result.get('data', {})
+        confidence_data = result.get('confidence_data', {})
+
+        # Store raw AI response
+        self.ai_response = result.get('raw_response', '')
+        self.confidence_data = json.dumps(confidence_data) if confidence_data else ''
+
+        # Extract and store individual fields (Story 4.3-4.6)
+        self._store_extracted_data(data, ollama)
+
+        _logger.info("JSOCR: Job %s AI analysis complete", self.id)
+        return result
+
+    def _store_extracted_data(self, data, ollama_service):
+        """Store extracted data in job fields.
+
+        Args:
+            data (dict): Extracted data from AI
+            ollama_service: OllamaService instance for parsing
+        """
+        self.ensure_one()
+
+        # Supplier (Story 4.3)
+        supplier_name = data.get('supplier_name')
+        self.extracted_supplier_name = supplier_name
+
+        # Find matching Odoo partner
+        if supplier_name:
+            partner = ollama_service.find_supplier(self.env, supplier_name)
+            if partner:
+                self.partner_id = partner.id
+
+        # Date (Story 4.4)
+        date_str = data.get('invoice_date')
+        parsed_date = ollama_service.parse_invoice_date(date_str)
+        if parsed_date:
+            self.extracted_invoice_date = parsed_date
+
+        # Invoice number (Story 4.4)
+        self.extracted_invoice_number = data.get('invoice_number')
+
+        # Lines (Story 4.5)
+        lines = ollama_service.parse_invoice_lines(data.get('lines', []))
+        self.extracted_lines = json.dumps(lines) if lines else ''
+
+        # Amounts (Story 4.6)
+        self.extracted_amount_untaxed = ollama_service._parse_amount(data.get('amount_untaxed')) or 0.0
+        self.extracted_amount_tax = ollama_service._parse_amount(data.get('amount_tax')) or 0.0
+        self.extracted_amount_total = ollama_service._parse_amount(data.get('amount_total')) or 0.0
+
+    # -------------------------------------------------------------------------
+    # INVOICE CREATION METHODS (Story 4.8-4.10)
+    # -------------------------------------------------------------------------
+
+    def action_create_invoice(self):
+        """Create draft supplier invoice from extracted data (button action).
+
+        Can be called from UI when job is in 'processing' state.
+
+        Returns:
+            dict: Action to open the created invoice
+        """
+        self.ensure_one()
+
+        if self.state != 'processing':
+            raise UserError(
+                f"Cannot create invoice for job in state '{self.state}'. "
+                "Job must be in 'processing' state."
+            )
+
+        if self.invoice_id:
+            raise UserError(
+                "Invoice already exists for this job. "
+                "Please delete it first if you want to recreate."
+            )
+
+        try:
+            invoice = self._create_draft_invoice()
+            return {
+                'type': 'ir.actions.act_window',
+                'res_model': 'account.move',
+                'res_id': invoice.id,
+                'view_mode': 'form',
+                'target': 'current',
+            }
+        except Exception as e:
+            _logger.error("JSOCR: Job %s invoice creation failed: %s", self.id, str(e))
+            raise UserError(f"Invoice creation failed: {str(e)}")
+
+    def _create_draft_invoice(self):
+        """Create a draft supplier invoice from extracted data (Story 4.8).
+
+        Creates account.move with type 'in_invoice' in draft state.
+        Associates partner if found, fills date and supplier reference.
+        Requirement: NFR4 - creation < 5 seconds
+
+        Returns:
+            account.move: Created invoice record
+        """
+        self.ensure_one()
+
+        _logger.info("JSOCR: Job %s creating draft invoice", self.id)
+
+        # Prepare invoice values
+        invoice_vals = {
+            'move_type': 'in_invoice',
+            'state': 'draft',
+            'jsocr_import_job_id': self.id,
+        }
+
+        # Partner (Story 4.8 - FR19)
+        if self.partner_id:
+            invoice_vals['partner_id'] = self.partner_id.id
+
+        # Date
+        if self.extracted_invoice_date:
+            invoice_vals['invoice_date'] = self.extracted_invoice_date
+
+        # Supplier reference (invoice number)
+        if self.extracted_invoice_number:
+            invoice_vals['ref'] = self.extracted_invoice_number
+
+        # Create invoice
+        invoice = self.env['account.move'].create(invoice_vals)
+        _logger.info("JSOCR: Job %s created invoice %s", self.id, invoice.id)
+
+        # Add invoice lines (Story 4.9)
+        self._create_invoice_lines(invoice)
+
+        # Attach PDF source (Story 4.10)
+        self._attach_pdf_to_invoice(invoice)
+
+        # Store confidence data on invoice
+        if self.confidence_data:
+            invoice.jsocr_confidence_data = self.confidence_data
+
+        # Link invoice to job
+        self.invoice_id = invoice.id
+
+        return invoice
+
+    def _create_invoice_lines(self, invoice):
+        """Create invoice lines from extracted data (Story 4.9 - FR20).
+
+        Uses supplier's default charge account if configured, otherwise
+        uses a generic expense account.
+
+        Args:
+            invoice: account.move record
+        """
+        self.ensure_one()
+
+        if not self.extracted_lines:
+            _logger.info("JSOCR: Job %s no lines to create", self.id)
+            return
+
+        try:
+            lines = json.loads(self.extracted_lines)
+        except (json.JSONDecodeError, TypeError):
+            _logger.warning("JSOCR: Job %s invalid lines JSON", self.id)
+            return
+
+        if not lines:
+            return
+
+        # Determine the account to use
+        account_id = self._get_expense_account()
+        if not account_id:
+            _logger.warning("JSOCR: Job %s no expense account found, skipping lines", self.id)
+            return
+
+        # Create lines
+        line_vals_list = []
+        for line in lines:
+            line_vals = {
+                'move_id': invoice.id,
+                'name': line.get('description', 'Ligne facture'),
+                'quantity': line.get('quantity', 1.0),
+                'price_unit': line.get('unit_price', 0.0),
+                'account_id': account_id,
+            }
+            line_vals_list.append(line_vals)
+
+        if line_vals_list:
+            self.env['account.move.line'].create(line_vals_list)
+            _logger.info("JSOCR: Job %s created %d invoice lines", self.id, len(line_vals_list))
+
+    def _get_expense_account(self):
+        """Get the expense account to use for invoice lines.
+
+        Priority:
+        1. Supplier's default JSOCR account
+        2. Generic expense account
+
+        Returns:
+            int or None: account.account ID
+        """
+        self.ensure_one()
+
+        # Check supplier's default account
+        if self.partner_id and self.partner_id.jsocr_default_account_id:
+            return self.partner_id.jsocr_default_account_id.id
+
+        # Find generic expense account (6xxx in Swiss plan)
+        expense_account = self.env['account.account'].search([
+            ('code', '=like', '6%'),
+            ('company_id', '=', self.env.company.id),
+        ], limit=1)
+
+        if expense_account:
+            return expense_account.id
+
+        # Fallback: any account that can be used for expenses
+        expense_account = self.env['account.account'].search([
+            ('account_type', '=', 'expense'),
+            ('company_id', '=', self.env.company.id),
+        ], limit=1)
+
+        return expense_account.id if expense_account else None
+
+    def _attach_pdf_to_invoice(self, invoice):
+        """Attach source PDF to the created invoice (Story 4.10 - FR21).
+
+        Creates ir.attachment linked to the invoice and also stores
+        the PDF in the account.move.jsocr_source_pdf field.
+
+        Args:
+            invoice: account.move record
+        """
+        self.ensure_one()
+
+        if not self.pdf_file:
+            _logger.warning("JSOCR: Job %s no PDF file to attach", self.id)
+            return
+
+        # Store PDF in invoice field
+        invoice.write({
+            'jsocr_source_pdf': self.pdf_file,
+            'jsocr_source_pdf_filename': self.pdf_filename,
+        })
+
+        # Create attachment
+        attachment_vals = {
+            'name': self.pdf_filename or 'source.pdf',
+            'type': 'binary',
+            'datas': self.pdf_file,
+            'res_model': 'account.move',
+            'res_id': invoice.id,
+            'mimetype': 'application/pdf',
+        }
+
+        self.env['ir.attachment'].create(attachment_vals)
+        _logger.info("JSOCR: Job %s attached PDF to invoice %s", self.id, invoice.id)
+
+    # -------------------------------------------------------------------------
+    # FULL PROCESSING WORKFLOW (Story 4.11-4.12)
+    # -------------------------------------------------------------------------
+
+    def action_process_full(self):
+        """Process job completely: OCR, AI analysis, and invoice creation.
+
+        Button action that runs the full pipeline in one click.
+
+        Returns:
+            dict: Action to open the created invoice or notification
+        """
+        self.ensure_one()
+
+        if self.state not in ('pending', 'processing'):
+            raise UserError(
+                f"Cannot process job in state '{self.state}'. "
+                "Job must be in 'pending' or 'processing' state."
+            )
+
+        try:
+            # Transition to processing if needed
+            if self.state == 'pending':
+                self.action_process()
+
+            # Step 1: Extract text
+            if not self.extracted_text:
+                self._extract_text()
+
+            # Step 2: AI analysis
+            ai_result = self._analyze_with_ai()
+            if not ai_result.get('success'):
+                error_type = ai_result.get('error_type', 'unknown')
+                if self._should_retry(error_type):
+                    self.action_mark_error(
+                        error_message=ai_result.get('error'),
+                        error_type=error_type
+                    )
+                    self.action_retry()
+                    return {
+                        'type': 'ir.actions.client',
+                        'tag': 'display_notification',
+                        'params': {
+                            'title': 'Erreur - Nouvelle tentative',
+                            'message': f"Erreur: {ai_result.get('error')}. Nouvelle tentative programmee.",
+                            'type': 'warning',
+                            'sticky': True,
+                        }
+                    }
+                else:
+                    self.action_mark_error(
+                        error_message=ai_result.get('error'),
+                        error_type=error_type
+                    )
+                    return {
+                        'type': 'ir.actions.client',
+                        'tag': 'display_notification',
+                        'params': {
+                            'title': 'Echec traitement',
+                            'message': ai_result.get('error'),
+                            'type': 'danger',
+                            'sticky': True,
+                        }
+                    }
+
+            # Step 3: Create invoice
+            invoice = self._create_draft_invoice()
+
+            # Step 4: Mark as done
+            self.action_mark_done()
+
+            # Step 5: Send notification (Story 4.15)
+            self._send_invoice_ready_notification()
+
+            return {
+                'type': 'ir.actions.act_window',
+                'res_model': 'account.move',
+                'res_id': invoice.id,
+                'view_mode': 'form',
+                'target': 'current',
+            }
+
+        except UserError:
+            raise
+        except Exception as e:
+            _logger.error("JSOCR: Job %s full processing failed: %s", self.id, str(e))
+            self.action_mark_error(
+                error_message=str(e),
+                error_type='processing_error'
+            )
+            raise UserError(f"Processing failed: {str(e)}")
+
+    def _process_job_async(self):
+        """Process job in background (for queue_job integration - Story 4.11).
+
+        This method is designed to be called by queue_job. It handles the
+        full processing pipeline and properly manages errors and retries.
+
+        Note: queue_job will be fully integrated when the dependency is uncommented.
+        """
+        self.ensure_one()
+
+        _logger.info("JSOCR: Job %s starting async processing", self.id)
+
+        try:
+            # Transition to processing
+            if self.state == 'pending':
+                self.state = 'processing'
+
+            # Step 1: Extract text
+            if not self.extracted_text:
+                self._extract_text()
+
+            # Step 2: AI analysis
+            ai_result = self._analyze_with_ai()
+            if not ai_result.get('success'):
+                error_type = ai_result.get('error_type', 'unknown')
+                self._handle_processing_error(ai_result.get('error'), error_type)
+                return
+
+            # Step 3: Create invoice
+            self._create_draft_invoice()
+
+            # Step 4: Mark as done
+            self.state = 'done'
+            _logger.info("JSOCR: Job %s async processing completed", self.id)
+
+            # Move PDF to success folder
+            try:
+                self._move_pdf_to_success()
+            except Exception as e:
+                _logger.error("JSOCR: Job %s failed to move PDF: %s", self.id, type(e).__name__)
+
+            # Send notification
+            self._send_invoice_ready_notification()
+
+        except Exception as e:
+            _logger.error("JSOCR: Job %s async processing error: %s", self.id, str(e))
+            self._handle_processing_error(str(e), 'processing_error')
+
+    def _handle_processing_error(self, error_message, error_type):
+        """Handle processing errors with retry logic (Story 4.12).
+
+        Implements the retry pattern: 3 attempts with backoff (5s, 15s, 30s).
+        Permanent errors (parse_error) go directly to 'error' state.
+
+        Args:
+            error_message (str): Error description
+            error_type (str): Error category for retry decision
+        """
+        self.ensure_one()
+
+        permanent_errors = ['parse_error', 'validation_error']
+
+        if error_type in permanent_errors:
+            # Permanent error - go directly to error state
+            self.write({
+                'state': 'error',
+                'error_message': error_message,
+            })
+            _logger.warning(
+                "JSOCR: Job %s permanent error (type=%s): %s",
+                self.id, error_type, error_message
+            )
+        elif self.retry_count < MAX_RETRIES:
+            # Transient error - can retry
+            new_retry_count = self.retry_count + 1
+            self.write({
+                'state': 'pending',  # Back to pending for retry
+                'retry_count': new_retry_count,
+                'error_message': f"Retry {new_retry_count}/{MAX_RETRIES}: {error_message}",
+            })
+            _logger.info(
+                "JSOCR: Job %s scheduled for retry %d/%d",
+                self.id, new_retry_count, MAX_RETRIES
+            )
+        else:
+            # Max retries exceeded
+            self.write({
+                'state': 'failed',
+                'error_message': f"Max retries exceeded: {error_message}",
+            })
+            _logger.warning("JSOCR: Job %s failed after %d retries", self.id, MAX_RETRIES)
+
+            # Move PDF to error folder and send alert
+            try:
+                self._move_pdf_to_error()
+            except Exception:
+                pass
+            try:
+                self._send_failure_alert()
+            except Exception:
+                pass
+
+    # -------------------------------------------------------------------------
+    # NOTIFICATION METHODS (Story 4.15)
+    # -------------------------------------------------------------------------
+
+    def _send_invoice_ready_notification(self):
+        """Send Odoo notification when invoice is ready (Story 4.15 - FR35).
+
+        Sends a system notification to the user who will validate the invoice.
+        The notification is clickable and opens the invoice list.
+        """
+        self.ensure_one()
+
+        if not self.invoice_id:
+            return
+
+        # Send activity/notification to users with OCR rights
+        try:
+            # Post a message in the chatter
+            self.message_post(
+                body=f"Facture brouillon creee: {self.invoice_id.name or 'Nouveau'}",
+                message_type='notification',
+                subtype_xmlid='mail.mt_note',
+            )
+
+            # Create activity for invoice validation
+            if self.invoice_id:
+                activity_type = self.env.ref('mail.mail_activity_data_todo', raise_if_not_found=False)
+                if activity_type:
+                    self.invoice_id.activity_schedule(
+                        activity_type_id=activity_type.id,
+                        summary='Facture OCR a valider',
+                        note=f'Cette facture a ete creee automatiquement depuis le fichier {self.pdf_filename}.',
+                        user_id=self.env.user.id,
+                    )
+
+            _logger.info("JSOCR: Job %s notification sent", self.id)
+
+        except Exception as e:
+            _logger.error("JSOCR: Job %s failed to send notification: %s", self.id, type(e).__name__)
+
+    # -------------------------------------------------------------------------
+    # CRON METHODS (Story 4.11)
+    # -------------------------------------------------------------------------
+
+    @api.model
+    def cron_process_pending_jobs(self):
+        """Cron method to process pending jobs.
+
+        Called by ir.cron to process jobs that are in 'pending' state.
+        Processes jobs one by one to respect NFR10 (one failure doesn't block others).
+
+        Returns:
+            int: Number of jobs processed
+        """
+        pending_jobs = self.search([('state', '=', 'pending')], limit=10)
+
+        if not pending_jobs:
+            return 0
+
+        _logger.info("JSOCR: Cron found %d pending job(s) to process", len(pending_jobs))
+
+        processed = 0
+        for job in pending_jobs:
+            try:
+                job._process_job_async()
+                processed += 1
+            except Exception as e:
+                _logger.error(
+                    "JSOCR: Cron failed to process job %s: %s",
+                    job.id, type(e).__name__
+                )
+                # Continue with next job (NFR10)
+                continue
+
+        _logger.info("JSOCR: Cron processed %d job(s)", processed)
+        return processed
