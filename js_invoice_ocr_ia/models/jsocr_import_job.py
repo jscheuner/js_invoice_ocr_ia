@@ -966,9 +966,9 @@ class JsocrImportJob(models.Model):
             return self.partner_id.jsocr_default_account_id.id
 
         # Find generic expense account (6xxx in Swiss plan)
+        # Note: In Odoo 18, account.account no longer has company_id field
         expense_account = self.env['account.account'].search([
             ('code', '=like', '6%'),
-            ('company_id', '=', self.env.company.id),
         ], limit=1)
 
         if expense_account:
@@ -977,7 +977,6 @@ class JsocrImportJob(models.Model):
         # Fallback: any account that can be used for expenses
         expense_account = self.env['account.account'].search([
             ('account_type', '=', 'expense'),
-            ('company_id', '=', self.env.company.id),
         ], limit=1)
 
         return expense_account.id if expense_account else None
