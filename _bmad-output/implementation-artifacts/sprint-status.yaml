@@ -79,9 +79,9 @@ development_status:
   epic-3-retrospective: optional
 
   # ============================================
-  # Epic 4: Analyse IA & Création Factures (15 stories)
+  # Epic 4: Analyse IA & Création Factures (20 stories)
   # ============================================
-  epic-4: done
+  epic-4: in-progress
   4-1-service-ollama-connexion-requete: done
   4-2-prompt-extraction-structuree: done
   4-3-extraction-fournisseur: done
@@ -97,6 +97,11 @@ development_status:
   4-13-vue-liste-jobs: done
   4-14-affichage-statut-job: done
   4-15-notification-factures-pretes: done
+  4-16-analyse-historique-factures-fournisseur: backlog
+  4-17-matching-intelligent-description-compte: backlog
+  4-18-stockage-patterns-compte-fournisseur: backlog
+  4-19-affichage-confiance-compte-lignes: backlog
+  4-20-apprentissage-corrections-compte-ligne: backlog
   epic-4-retrospective: optional
 
   # ============================================
