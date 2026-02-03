@@ -74,21 +74,25 @@ class JsocrImportJob(models.Model):
     # Extraction results
     extracted_text = fields.Text(
         string='Extracted Text',
+        copy=False,
         help='Raw text extracted from PDF via OCR',
     )
 
     ai_response = fields.Text(
         string='AI Response (JSON)',
+        copy=False,
         help='Raw JSON response from Ollama AI analysis',
     )
 
     confidence_data = fields.Text(
         string='Confidence Data (JSON)',
+        copy=False,
         help='Per-field confidence scores in JSON format',
     )
 
     error_message = fields.Text(
         string='Error Message',
+        copy=False,
         help='Error details if job failed',
     )
 
@@ -108,6 +112,7 @@ class JsocrImportJob(models.Model):
         comodel_name='account.move',
         string='Generated Invoice',
         ondelete='set null',
+        copy=False,
         help='Link to the generated supplier invoice',
     )
 
@@ -115,6 +120,7 @@ class JsocrImportJob(models.Model):
         comodel_name='res.partner',
         string='Detected Supplier',
         ondelete='set null',
+        copy=False,
         help='Supplier detected from AI extraction',
     )
 
@@ -122,45 +128,53 @@ class JsocrImportJob(models.Model):
         comodel_name='jsocr.correction',
         inverse_name='import_job_id',
         string='Corrections',
+        copy=False,
         help='User corrections associated with this import job',
     )
 
     # Extracted data fields (Story 4.3-4.6)
     extracted_supplier_name = fields.Char(
         string='Extracted Supplier',
+        copy=False,
         help='Supplier name extracted by AI',
     )
 
     extracted_invoice_date = fields.Date(
         string='Extracted Date',
+        copy=False,
         help='Invoice date extracted by AI',
     )
 
     extracted_invoice_number = fields.Char(
         string='Extracted Invoice Number',
+        copy=False,
         help='Invoice number (supplier reference) extracted by AI',
     )
 
     extracted_lines = fields.Text(
         string='Extracted Lines (JSON)',
+        copy=False,
         help='Invoice lines extracted by AI in JSON format',
     )
 
     extracted_amount_untaxed = fields.Float(
         string='Extracted Amount Untaxed',
         digits='Account',
+        copy=False,
         help='Amount without tax extracted by AI',
     )
 
     extracted_amount_tax = fields.Float(
         string='Extracted Tax Amount',
         digits='Account',
+        copy=False,
         help='Tax amount extracted by AI',
     )
 
     extracted_amount_total = fields.Float(
         string='Extracted Total',
         digits='Account',
+        copy=False,
         help='Total amount extracted by AI',
     )
 
@@ -168,6 +182,7 @@ class JsocrImportJob(models.Model):
     retry_count = fields.Integer(
         string='Retry Count',
         default=0,
+        copy=False,
         help='Number of retry attempts (max 3)',
     )
 
@@ -222,6 +237,33 @@ class JsocrImportJob(models.Model):
                 job.next_retry_delay = RETRY_DELAYS[job.retry_count]
             else:
                 job.next_retry_delay = RETRY_DELAYS[-1]
+
+    # -------------------------------------------------------------------------
+    # COPY METHOD
+    # -------------------------------------------------------------------------
+
+    def copy(self, default=None):
+        """Override copy to reset state and ensure clean duplication.
+
+        When duplicating an import job, we keep only the PDF file and filename.
+        All processing results, relations, and state are reset to draft.
+
+        Args:
+            default (dict): Default values for the new record
+
+        Returns:
+            jsocr.import.job: New duplicated record
+        """
+        self.ensure_one()
+        default = dict(default or {})
+
+        # Force reset to draft state
+        default.setdefault('state', 'draft')
+
+        # Ensure detected_language is reset to default
+        default.setdefault('detected_language', 'fr')
+
+        return super().copy(default)
 
     # -------------------------------------------------------------------------
     # ACTION METHODS - State Machine
