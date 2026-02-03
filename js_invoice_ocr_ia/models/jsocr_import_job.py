@@ -876,9 +876,10 @@ class JsocrImportJob(models.Model):
         if self.partner_id:
             invoice_vals['partner_id'] = self.partner_id.id
 
-        # Date
+        # Date (invoice_date = document date, date = accounting date)
         if self.extracted_invoice_date:
             invoice_vals['invoice_date'] = self.extracted_invoice_date
+            invoice_vals['date'] = self.extracted_invoice_date
 
         # Supplier reference (invoice number)
         if self.extracted_invoice_number:
