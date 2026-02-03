@@ -6,7 +6,7 @@ inputDocuments:
   - prd.md
   - architecture.md
 totalEpics: 6
-totalStories: 49
+totalStories: 54
 frCoverage: 46/46
 ---
 
@@ -216,7 +216,7 @@ This document provides the complete epic and story breakdown for js_invoice_ocr_
 ---
 
 ### Epic 4: Analyse IA & Création Factures
-**Goal:** Permettre au système d'analyser le texte extrait via Ollama, extraire les données structurées et créer une facture brouillon dans Odoo.
+**Goal:** Permettre au système d'analyser le texte extrait via Ollama, extraire les données structurées et créer une facture brouillon dans Odoo avec prédiction intelligente des comptes de charge.
 
 **FRs:** FR12, FR13, FR14, FR15, FR16, FR17, FR18, FR19, FR20, FR21, FR32, FR33, FR34, FR35
 
@@ -228,6 +228,8 @@ This document provides the complete epic and story breakdown for js_invoice_ocr_
 - Association fournisseur Odoo
 - Traitement asynchrone queue_job
 - Vue liste des jobs avec statuts
+- Prédiction intelligente du compte de charge par ligne (basée sur historique fournisseur)
+- Apprentissage des corrections de compte
 
 **Depends on:** Epic 3
 
@@ -869,6 +871,109 @@ So that **je puisse agir rapidement** (FR35).
 
 ---
 
+### Story 4.16: Analyse Historique Factures Fournisseur
+
+As a **système**,
+I want **analyser les 10 dernières factures validées d'un fournisseur**,
+So that **je puisse prédire les comptes de charge appropriés pour les nouvelles factures**.
+
+**Acceptance Criteria:**
+
+**Given** un fournisseur identifié pour une nouvelle facture
+**When** le système prépare la création des lignes de facture
+**Then** les 10 dernières factures validées (état 'posted') du fournisseur sont récupérées
+**And** toutes les lignes de ces factures sont extraites avec leur description et compte de charge
+**And** les données sont structurées pour le matching (description → account_id)
+**And** si moins de 10 factures existent, toutes les factures disponibles sont utilisées
+**And** seuls les comptes de type 'expense' sont considérés
+
+---
+
+### Story 4.17: Matching Intelligent Description → Compte
+
+As a **système**,
+I want **prédire le compte de charge le plus probable pour chaque ligne de facture basé sur la similarité des descriptions**,
+So that **les lignes soient pré-remplies avec le bon compte**.
+
+**Acceptance Criteria:**
+
+**Given** une ligne de facture à créer avec une description
+**And** l'historique des lignes du fournisseur (Story 4.16)
+**When** le système calcule le compte à utiliser
+**Then** la description de la ligne actuelle est comparée aux descriptions historiques
+**And** l'algorithme utilise:
+  - Correspondance exacte (priorité maximale)
+  - Mots-clés communs normalisés (sans accents, minuscules)
+  - Score de similarité basé sur le nombre de mots communs
+**And** le compte le plus fréquent pour les descriptions similaires est retourné
+**And** un score de confiance (0-100%) est calculé basé sur:
+  - Nombre de matches trouvés
+  - Fréquence du compte dans les matches
+  - Qualité de la similarité
+**And** si aucun match n'est trouvé (confiance < 30%), le fallback _get_expense_account() est utilisé
+
+---
+
+### Story 4.18: Stockage Patterns Compte par Fournisseur
+
+As a **système**,
+I want **mémoriser les associations description/compte apprises**,
+So that **les prédictions s'améliorent avec le temps sans recalcul**.
+
+**Acceptance Criteria:**
+
+**Given** une facture validée avec des lignes
+**When** la facture passe en état 'posted'
+**Then** pour chaque ligne, l'association (partner_id, keywords, account_id) est enregistrée ou mise à jour
+**And** le modèle jsocr.account.pattern stocke:
+  - partner_id (Many2one res.partner)
+  - keywords (Char) - mots-clés normalisés de la description
+  - account_id (Many2one account.account)
+  - usage_count (Integer) - incrémenté à chaque utilisation
+  - last_used (Datetime)
+**And** les patterns sont utilisés en priorité avant l'analyse historique complète
+**And** un pattern avec usage_count élevé a plus de poids dans la prédiction
+
+---
+
+### Story 4.19: Affichage Confiance Compte sur Lignes Facture
+
+As a **utilisateur OCR**,
+I want **voir la confiance de prédiction du compte sur chaque ligne de facture**,
+So that **je sache quelles lignes vérifier en priorité**.
+
+**Acceptance Criteria:**
+
+**Given** une facture brouillon créée par OCR avec lignes
+**When** j'affiche le formulaire de la facture
+**Then** chaque ligne affiche un indicateur de confiance pour le compte:
+  - 🟢 Vert (≥80%) : "Compte prédit avec haute confiance"
+  - 🟡 Orange (50-79%) : "Compte suggéré - à vérifier"
+  - 🔴 Rouge (<50%) : "Compte par défaut - vérification requise"
+**And** au survol, le détail de la prédiction est affiché (source: historique/pattern/défaut)
+**And** le champ jsocr_account_confidence est ajouté à account.move.line
+
+---
+
+### Story 4.20: Apprentissage des Corrections de Compte par Ligne
+
+As a **système**,
+I want **apprendre quand l'utilisateur corrige le compte d'une ligne**,
+So that **les prochaines prédictions soient plus précises**.
+
+**Acceptance Criteria:**
+
+**Given** une facture brouillon où l'utilisateur modifie le compte d'une ligne
+**When** la facture est validée
+**Then** si le compte final diffère du compte prédit:
+  - Une jsocr.correction est créée (type: line_account)
+  - Le pattern jsocr.account.pattern est mis à jour ou créé
+  - Le usage_count du nouveau pattern est incrémenté
+**And** les corrections répétées augmentent le poids du pattern
+**And** un pattern corrigé 3+ fois devient prioritaire sur l'historique
+
+---
+
 ## Epic 5: Validation & Indicateurs
 
 **Goal:** Permettre à l'utilisateur de valider les factures brouillon avec des indicateurs visuels de confiance et des alertes sur les montants.
@@ -1117,8 +1222,8 @@ So that **l'apprentissage soit automatisé**.
 | Epic 1: Fondations & Installation | 7 | NFR13, NFR16, NFR19, NFR20 |
 | Epic 2: Configuration & Connectivité | 6 | FR5, FR10-11, FR36-41, FR44 |
 | Epic 3: Ingestion PDF & OCR | 7 | FR1-4, FR6-9 |
-| Epic 4: Analyse IA & Création Factures | 15 | FR12-21, FR32-35 |
+| Epic 4: Analyse IA & Création Factures | 20 | FR12-21, FR32-35, FR26-27 (prédiction compte) |
 | Epic 5: Validation & Indicateurs | 7 | FR22-24, FR42-43, FR45-46 |
 | Epic 6: Apprentissage & Corrections | 7 | FR25-31 |
-| **Total** | **49 stories** | **46 FRs couverts** |
+| **Total** | **54 stories** | **46 FRs couverts** |
 
