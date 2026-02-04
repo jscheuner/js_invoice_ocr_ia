@@ -913,6 +913,9 @@ class JsocrImportJob(models.Model):
         3. Supplier's default charge account (fallback)
         4. Generic expense account (last resort)
 
+        Lines are created via invoice_line_ids command tuples to ensure
+        proper Odoo 18 compute field triggering.
+
         Args:
             invoice: account.move record
         """
@@ -940,23 +943,31 @@ class JsocrImportJob(models.Model):
         # Get historical data for prediction (Story 4.16)
         historical_lines = []
         if self.partner_id:
-            historical_lines = self._get_historical_lines_data(self.partner_id.id)
+            try:
+                historical_lines = self._get_historical_lines_data(self.partner_id.id)
+            except Exception as e:
+                _logger.warning("JSOCR: Job %s history retrieval failed: %s", self.id, e)
 
-        # Create lines with predicted accounts
-        line_vals_list = []
+        # Build line commands for invoice_line_ids (Odoo 18 ORM pattern)
+        line_commands = []
         for line in lines:
             description = line.get('description', 'Ligne facture')
 
             # Predict account for this line (Story 4.17)
-            account_id, confidence, source = self._predict_line_account(
-                self.partner_id.id if self.partner_id else None,
-                description,
-                historical_lines,
-                fallback_account_id,
-            )
+            try:
+                account_id, confidence, source = self._predict_line_account(
+                    self.partner_id.id if self.partner_id else None,
+                    description,
+                    historical_lines,
+                    fallback_account_id,
+                )
+            except Exception as e:
+                _logger.warning("JSOCR: Job %s prediction failed for line: %s", self.id, e)
+                account_id = fallback_account_id
+                confidence = 10
+                source = 'default'
 
             line_vals = {
-                'move_id': invoice.id,
                 'name': description,
                 'quantity': line.get('quantity', 1.0),
                 'price_unit': line.get('unit_price', 0.0),
@@ -965,11 +976,11 @@ class JsocrImportJob(models.Model):
                 'jsocr_account_source': source,
                 'jsocr_predicted_account_id': account_id,
             }
-            line_vals_list.append(line_vals)
+            line_commands.append((0, 0, line_vals))
 
-        if line_vals_list:
-            self.env['account.move.line'].create(line_vals_list)
-            _logger.info("JSOCR: Job %s created %d invoice lines", self.id, len(line_vals_list))
+        if line_commands:
+            invoice.write({'invoice_line_ids': line_commands})
+            _logger.info("JSOCR: Job %s created %d invoice lines", self.id, len(line_commands))
 
     def _get_expense_account(self):
         """Get the expense account to use for invoice lines.
