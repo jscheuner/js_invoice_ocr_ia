@@ -117,6 +117,83 @@ class JsocrMask(models.Model):
     # -------------------------------------------------------------------------
 
     @api.model
+    def generate_mask_from_history(self, partner_id):
+        """Auto-generate a mask from successful invoice history (Story 6.7).
+
+        Analyzes the last posted invoices for a supplier and captures
+        common field patterns (detected fields, amounts structure, line patterns).
+
+        Args:
+            partner_id (int): Supplier partner ID
+
+        Returns:
+            jsocr.mask or False: The created mask, or False if not enough data
+        """
+        partner = self.env['res.partner'].browse(partner_id)
+        if not partner.exists():
+            return False
+
+        # Get successful OCR invoices
+        invoices = self.env['account.move'].search([
+            ('partner_id', '=', partner_id),
+            ('move_type', '=', 'in_invoice'),
+            ('state', '=', 'posted'),
+            ('jsocr_import_job_id', '!=', False),
+        ], order='invoice_date desc', limit=10)
+
+        if len(invoices) < 3:
+            return False
+
+        # Build mask data from patterns
+        mask_data = {
+            'version': '1.0',
+            'auto_generated': True,
+            'source_invoice_count': len(invoices),
+            'fields': {},
+            'line_patterns': [],
+        }
+
+        # Analyze common fields across invoices
+        has_ref = sum(1 for inv in invoices if inv.ref) / len(invoices)
+        avg_lines = sum(len(inv.invoice_line_ids.filtered(
+            lambda l: l.account_id.account_type in ('expense', 'expense_depreciation', 'expense_direct_cost')
+        )) for inv in invoices) / len(invoices)
+
+        mask_data['fields'] = {
+            'supplier_ref_frequency': round(has_ref, 2),
+            'avg_line_count': round(avg_lines, 1),
+        }
+
+        # Capture common account patterns
+        account_ids = {}
+        for inv in invoices:
+            for line in inv.invoice_line_ids:
+                if line.account_id and line.account_id.account_type in (
+                    'expense', 'expense_depreciation', 'expense_direct_cost'
+                ):
+                    code = line.account_id.code
+                    account_ids[code] = account_ids.get(code, 0) + 1
+
+        mask_data['common_accounts'] = dict(
+            sorted(account_ids.items(), key=lambda x: x[1], reverse=True)[:5]
+        )
+
+        # Create the mask
+        mask = self.create({
+            'name': f'Auto - {partner.name}',
+            'partner_id': partner_id,
+            'mask_data': json.dumps(mask_data, indent=2),
+            'active': True,
+            'usage_count': len(invoices),
+        })
+
+        _logger.info(
+            "JSOCR: Auto-generated mask %s for partner %s from %d invoices",
+            mask.id, partner_id, len(invoices)
+        )
+        return mask
+
+    @api.model
     def get_mask_for_partner(self, partner_id):
         """Get the most used active mask for a given partner.
 

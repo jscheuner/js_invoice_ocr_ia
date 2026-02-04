@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ===================================================================
+         List View for jsocr.correction (Story 6.4)
+         =================================================================== -->
+    <record id="jsocr_correction_view_list" model="ir.ui.view">
+        <field name="name">jsocr.correction.view.list</field>
+        <field name="model">jsocr.correction</field>
+        <field name="arch" type="xml">
+            <list string="Corrections OCR" default_order="create_date desc">
+                <field name="create_date" string="Date"/>
+                <field name="user_id" string="Utilisateur" widget="many2one_avatar_user"/>
+                <field name="correction_type" string="Type" widget="badge"
+                       decoration-info="correction_type == 'supplier_alias'"
+                       decoration-warning="correction_type == 'charge_account'"
+                       decoration-success="correction_type == 'field_value'"
+                       decoration-danger="correction_type == 'line_account'"/>
+                <field name="field_name" string="Champ"/>
+                <field name="original_value" string="Valeur IA"/>
+                <field name="corrected_value" string="Valeur corrigee"/>
+                <field name="import_job_id" string="Job"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ===================================================================
+         Form View for jsocr.correction (Story 6.4)
+         =================================================================== -->
+    <record id="jsocr_correction_view_form" model="ir.ui.view">
+        <field name="name">jsocr.correction.view.form</field>
+        <field name="model">jsocr.correction</field>
+        <field name="arch" type="xml">
+            <form string="Correction OCR">
+                <sheet>
+                    <group>
+                        <group string="Correction">
+                            <field name="correction_type"/>
+                            <field name="field_name"/>
+                            <field name="original_value"/>
+                            <field name="corrected_value"/>
+                        </group>
+                        <group string="Contexte">
+                            <field name="import_job_id"/>
+                            <field name="user_id"/>
+                            <field name="create_date"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ===================================================================
+         Search View for jsocr.correction (Story 6.4)
+         =================================================================== -->
+    <record id="jsocr_correction_view_search" model="ir.ui.view">
+        <field name="name">jsocr.correction.view.search</field>
+        <field name="model">jsocr.correction</field>
+        <field name="arch" type="xml">
+            <search string="Rechercher corrections">
+                <field name="field_name"/>
+                <field name="original_value"/>
+                <field name="corrected_value"/>
+                <field name="user_id"/>
+                <field name="import_job_id"/>
+                <separator/>
+                <filter string="Alias fournisseur" name="filter_supplier"
+                        domain="[('correction_type', '=', 'supplier_alias')]"/>
+                <filter string="Compte de charge" name="filter_account"
+                        domain="[('correction_type', '=', 'charge_account')]"/>
+                <filter string="Compte ligne" name="filter_line_account"
+                        domain="[('correction_type', '=', 'line_account')]"/>
+                <filter string="Valeur champ" name="filter_field"
+                        domain="[('correction_type', '=', 'field_value')]"/>
+                <separator/>
+                <group expand="0" string="Regrouper par">
+                    <filter string="Type" name="groupby_type"
+                            context="{'group_by': 'correction_type'}"/>
+                    <filter string="Utilisateur" name="groupby_user"
+                            context="{'group_by': 'user_id'}"/>
+                    <filter string="Date" name="groupby_date"
+                            context="{'group_by': 'create_date:month'}"/>
+                    <filter string="Job" name="groupby_job"
+                            context="{'group_by': 'import_job_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ===================================================================
+         Action for corrections (Story 6.4)
+         =================================================================== -->
+    <record id="jsocr_correction_action" model="ir.actions.act_window">
+        <field name="name">Historique Corrections</field>
+        <field name="res_model">jsocr.correction</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="jsocr_correction_view_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Aucune correction enregistree
+            </p>
+            <p>
+                Les corrections sont enregistrees automatiquement quand vous modifiez
+                les donnees d'une facture OCR avant validation.
+            </p>
+        </field>
+    </record>
+
+</odoo>

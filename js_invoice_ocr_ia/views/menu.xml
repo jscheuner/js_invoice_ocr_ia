@@ -55,6 +55,34 @@
               groups="js_invoice_ocr_ia.group_jsocr_manager"
               sequence="20"/>
 
+    <!-- Apprentissage submenu (Story 6.4, 6.6) -->
+    <menuitem id="menu_jsocr_learning"
+              name="Apprentissage"
+              parent="menu_jsocr_root"
+              groups="js_invoice_ocr_ia.group_jsocr_manager"
+              sequence="20"/>
+
+    <!-- Corrections history -->
+    <menuitem id="menu_jsocr_corrections"
+              name="Historique Corrections"
+              parent="menu_jsocr_learning"
+              action="jsocr_correction_action"
+              sequence="10"/>
+
+    <!-- Masks management -->
+    <menuitem id="menu_jsocr_masks"
+              name="Masques d'extraction"
+              parent="menu_jsocr_learning"
+              action="jsocr_mask_action"
+              sequence="20"/>
+
+    <!-- Account patterns -->
+    <menuitem id="menu_jsocr_patterns"
+              name="Patterns de compte"
+              parent="menu_jsocr_learning"
+              action="jsocr_account_pattern_action"
+              sequence="30"/>
+
     <!-- Configuration submenu -->
     <menuitem id="menu_jsocr_configuration"
               name="Configuration"

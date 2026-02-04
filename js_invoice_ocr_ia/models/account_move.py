@@ -283,26 +283,149 @@ class AccountMove(models.Model):
     # -------------------------------------------------------------------------
 
     def action_post(self):
-        """Override action_post to learn from account corrections on OCR invoices.
+        """Override action_post to learn from corrections on OCR invoices.
 
-        When an OCR-created invoice is validated, compare predicted accounts
-        with final accounts on each line. If they differ, create a correction
-        record and update the account pattern for future predictions.
+        When an OCR-created invoice is validated:
+        - Story 6.1: Detect supplier corrections and add aliases
+        - Story 6.2: Detect charge account corrections
+        - Story 4.20: Detect line account corrections and update patterns
+        - Story 6.7: Trigger mask generation if enough invoices
         """
         res = super().action_post()
 
         for move in self:
-            if not move.jsocr_import_job_id or not move.partner_id:
+            if not move.jsocr_import_job_id:
                 continue
             try:
-                move._learn_account_corrections()
+                move._learn_supplier_correction()
+                move._learn_charge_account_correction()
+                if move.partner_id:
+                    move._learn_account_corrections()
+                    move._trigger_mask_generation()
             except Exception as e:
                 _logger.error(
-                    "JSOCR: Failed to learn account corrections for move %s: %s",
+                    "JSOCR: Failed to learn corrections for move %s: %s",
                     move.id, type(e).__name__
                 )
 
         return res
+
+    def _learn_supplier_correction(self):
+        """Detect and learn from supplier corrections (Story 6.1 - FR25, FR31).
+
+        If the user changed the supplier from what the AI detected,
+        add the AI-detected name as an alias for the correct supplier.
+        """
+        self.ensure_one()
+        job = self.jsocr_import_job_id
+        if not job or not self.partner_id:
+            return
+
+        extracted_name = job.extracted_supplier_name
+        if not extracted_name:
+            return
+
+        # Check if the supplier was changed (AI detected a different one or none)
+        ai_partner = job.partner_id
+        if ai_partner and ai_partner.id == self.partner_id.id:
+            return  # No change
+
+        # The user corrected the supplier - add the AI name as alias
+        CorrectionModel = self.env['jsocr.correction']
+        self.partner_id.add_alias(extracted_name)
+
+        CorrectionModel.create({
+            'import_job_id': job.id,
+            'field_name': 'partner_id',
+            'original_value': extracted_name,
+            'corrected_value': self.partner_id.name,
+            'correction_type': 'supplier_alias',
+        })
+        _logger.info(
+            "JSOCR: Learned supplier alias '%s' for partner %s",
+            extracted_name[:30], self.partner_id.id
+        )
+
+    def _learn_charge_account_correction(self):
+        """Detect and learn default charge account for supplier (Story 6.2 - FR26).
+
+        When a supplier invoice is validated, check the most used account
+        across lines and set it as the supplier's default if not already set.
+        """
+        self.ensure_one()
+        if not self.partner_id or not self.jsocr_import_job_id:
+            return
+
+        # Count accounts used on expense lines
+        account_counts = {}
+        for line in self.invoice_line_ids:
+            if not line.account_id:
+                continue
+            if line.account_id.account_type not in (
+                'expense', 'expense_depreciation', 'expense_direct_cost'
+            ):
+                continue
+            aid = line.account_id.id
+            account_counts[aid] = account_counts.get(aid, 0) + 1
+
+        if not account_counts:
+            return
+
+        # Find the most used account
+        most_used_account_id = max(account_counts, key=account_counts.get)
+
+        # Update supplier default if different
+        current_default = self.partner_id.jsocr_default_account_id.id if self.partner_id.jsocr_default_account_id else None
+        if current_default != most_used_account_id:
+            old_code = self.partner_id.jsocr_default_account_id.code if self.partner_id.jsocr_default_account_id else 'none'
+            new_account = self.env['account.account'].browse(most_used_account_id)
+            self.partner_id.jsocr_default_account_id = most_used_account_id
+
+            self.env['jsocr.correction'].create({
+                'import_job_id': self.jsocr_import_job_id.id,
+                'field_name': 'default_account_id',
+                'original_value': old_code,
+                'corrected_value': new_account.code,
+                'correction_type': 'charge_account',
+            })
+            _logger.info(
+                "JSOCR: Updated default account for partner %s to %s",
+                self.partner_id.id, new_account.code
+            )
+
+    def _trigger_mask_generation(self):
+        """Trigger automatic mask generation if enough invoices (Story 6.7).
+
+        After 3+ successful invoices from the same supplier, generate a mask
+        capturing the common extraction patterns.
+        """
+        self.ensure_one()
+        if not self.partner_id:
+            return
+
+        MaskModel = self.env['jsocr.mask']
+
+        # Check if mask already exists for this supplier
+        existing_mask = MaskModel.search([
+            ('partner_id', '=', self.partner_id.id),
+            ('active', '=', True),
+        ], limit=1)
+
+        if existing_mask:
+            # Increment usage count on existing mask
+            existing_mask.action_increment_usage()
+            return
+
+        # Count successful invoices for this supplier
+        done_count = self.search_count([
+            ('partner_id', '=', self.partner_id.id),
+            ('move_type', '=', 'in_invoice'),
+            ('state', '=', 'posted'),
+            ('jsocr_import_job_id', '!=', False),
+        ])
+
+        if done_count >= 3:
+            MaskModel.generate_mask_from_history(self.partner_id.id)
 
     def _learn_account_corrections(self):
         """Detect and learn from account corrections on invoice lines (Story 4.20).

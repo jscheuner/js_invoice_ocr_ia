@@ -120,12 +120,12 @@ development_status:
   # ============================================
   # Epic 6: Apprentissage & Corrections (7 stories)
   # ============================================
-  epic-6: backlog
-  6-1-enregistrement-correction-fournisseur: backlog
-  6-2-enregistrement-correction-compte-charge: backlog
-  6-3-amelioration-precision-historique: backlog
-  6-4-vue-historique-corrections: backlog
-  6-5-stockage-masques-fournisseur: backlog
-  6-6-vue-gestion-masques: backlog
-  6-7-generation-automatique-masque: backlog
+  epic-6: done
+  6-1-enregistrement-correction-fournisseur: done
+  6-2-enregistrement-correction-compte-charge: done
+  6-3-amelioration-precision-historique: done
+  6-4-vue-historique-corrections: done
+  6-5-stockage-masques-fournisseur: done
+  6-6-vue-gestion-masques: done
+  6-7-generation-automatique-masque: done
   epic-6-retrospective: optional
