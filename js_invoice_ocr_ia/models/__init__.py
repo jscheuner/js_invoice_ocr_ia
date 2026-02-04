@@ -7,5 +7,6 @@ from . import jsocr_config        # defines model: jsocr.config
 from . import jsocr_import_job    # defines model: jsocr.import.job
 from . import jsocr_mask          # defines model: jsocr.mask
 from . import jsocr_correction    # defines model: jsocr.correction
+from . import jsocr_account_pattern  # defines model: jsocr.account.pattern
 from . import res_partner         # extends model: res.partner
 from . import account_move        # extends model: account.move

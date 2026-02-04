@@ -238,3 +238,112 @@ class AccountMove(models.Model):
         """
         self.ensure_one()
         return bool(self.jsocr_import_job_id)
+
+    # -------------------------------------------------------------------------
+    # LEARNING HOOK (Story 4.20)
+    # -------------------------------------------------------------------------
+
+    def action_post(self):
+        """Override action_post to learn from account corrections on OCR invoices.
+
+        When an OCR-created invoice is validated, compare predicted accounts
+        with final accounts on each line. If they differ, create a correction
+        record and update the account pattern for future predictions.
+        """
+        res = super().action_post()
+
+        for move in self:
+            if not move.jsocr_import_job_id or not move.partner_id:
+                continue
+            try:
+                move._learn_account_corrections()
+            except Exception as e:
+                _logger.error(
+                    "JSOCR: Failed to learn account corrections for move %s: %s",
+                    move.id, type(e).__name__
+                )
+
+        return res
+
+    def _learn_account_corrections(self):
+        """Detect and learn from account corrections on invoice lines (Story 4.20).
+
+        For each line where the final account differs from the predicted account,
+        creates a jsocr.correction record and updates the jsocr.account.pattern.
+        """
+        self.ensure_one()
+
+        if not self.jsocr_import_job_id or not self.partner_id:
+            return
+
+        PatternModel = self.env['jsocr.account.pattern']
+        CorrectionModel = self.env['jsocr.correction']
+
+        for line in self.invoice_line_ids:
+            if not line.name or not line.account_id:
+                continue
+            # Skip non-expense accounts
+            if line.account_id.account_type not in (
+                'expense', 'expense_depreciation', 'expense_direct_cost'
+            ):
+                continue
+
+            # Always update/create pattern for confirmed lines
+            PatternModel.get_or_create_pattern(
+                self.partner_id.id,
+                line.name,
+                line.account_id.id,
+            )
+
+            # If account was changed from prediction, record correction
+            if line.jsocr_predicted_account_id and line.jsocr_predicted_account_id != line.account_id:
+                CorrectionModel.create({
+                    'import_job_id': self.jsocr_import_job_id.id,
+                    'field_name': 'account_id',
+                    'original_value': line.jsocr_predicted_account_id.code,
+                    'corrected_value': line.account_id.code,
+                    'correction_type': 'line_account',
+                })
+                _logger.info(
+                    "JSOCR: Learned account correction on move %s: %s -> %s",
+                    self.id,
+                    line.jsocr_predicted_account_id.code,
+                    line.account_id.code,
+                )
+
+
+class AccountMoveLine(models.Model):
+    """Extension of account.move.line with JSOCR prediction fields.
+
+    Adds fields to track the predicted account, confidence score,
+    and prediction source for lines created via OCR processing.
+    """
+
+    _inherit = 'account.move.line'
+
+    jsocr_account_confidence = fields.Integer(
+        string='Account Confidence',
+        help='Confidence score for predicted account (0-100). '
+             'Green >= 80, Orange 50-79, Red < 50',
+    )
+
+    jsocr_account_source = fields.Selection(
+        selection=[
+            ('pattern', 'Learned Pattern'),
+            ('history', 'Historical Analysis'),
+            ('default', 'Default Account'),
+        ],
+        string='Prediction Source',
+        help='How the account was predicted: '
+             'pattern = from learned patterns, '
+             'history = from similar historical lines, '
+             'default = fallback expense account',
+    )
+
+    jsocr_predicted_account_id = fields.Many2one(
+        comodel_name='account.account',
+        string='Predicted Account',
+        ondelete='set null',
+        help='The account originally predicted by OCR. '
+             'Used to detect user corrections for learning.',
+    )

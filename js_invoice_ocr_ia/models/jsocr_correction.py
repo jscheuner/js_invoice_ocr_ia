@@ -56,12 +56,14 @@ class JsocrCorrection(models.Model):
             ('supplier_alias', 'Supplier Alias'),
             ('charge_account', 'Charge Account'),
             ('field_value', 'Field Value'),
+            ('line_account', 'Line Account'),
         ],
         string='Correction Type',
         required=True,
         help='Type of correction: supplier_alias adds a new supplier name alias, '
              'charge_account sets the default charge account for a supplier, '
-             'field_value records a generic field correction for learning',
+             'field_value records a generic field correction for learning, '
+             'line_account records an account correction on an invoice line',
     )
 
     user_id = fields.Many2one(

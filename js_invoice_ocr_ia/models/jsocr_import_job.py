@@ -907,8 +907,11 @@ class JsocrImportJob(models.Model):
     def _create_invoice_lines(self, invoice):
         """Create invoice lines from extracted data (Story 4.9 - FR20).
 
-        Uses supplier's default charge account if configured, otherwise
-        uses a generic expense account.
+        Uses intelligent account prediction based on:
+        1. Learned patterns (jsocr.account.pattern)
+        2. Historical invoice lines from last 10 invoices
+        3. Supplier's default charge account (fallback)
+        4. Generic expense account (last resort)
 
         Args:
             invoice: account.move record
@@ -928,21 +931,39 @@ class JsocrImportJob(models.Model):
         if not lines:
             return
 
-        # Determine the account to use
-        account_id = self._get_expense_account()
-        if not account_id:
+        # Fallback account
+        fallback_account_id = self._get_expense_account()
+        if not fallback_account_id:
             _logger.warning("JSOCR: Job %s no expense account found, skipping lines", self.id)
             return
 
-        # Create lines
+        # Get historical data for prediction (Story 4.16)
+        historical_lines = []
+        if self.partner_id:
+            historical_lines = self._get_historical_lines_data(self.partner_id.id)
+
+        # Create lines with predicted accounts
         line_vals_list = []
         for line in lines:
+            description = line.get('description', 'Ligne facture')
+
+            # Predict account for this line (Story 4.17)
+            account_id, confidence, source = self._predict_line_account(
+                self.partner_id.id if self.partner_id else None,
+                description,
+                historical_lines,
+                fallback_account_id,
+            )
+
             line_vals = {
                 'move_id': invoice.id,
-                'name': line.get('description', 'Ligne facture'),
+                'name': description,
                 'quantity': line.get('quantity', 1.0),
                 'price_unit': line.get('unit_price', 0.0),
                 'account_id': account_id,
+                'jsocr_account_confidence': confidence,
+                'jsocr_account_source': source,
+                'jsocr_predicted_account_id': account_id,
             }
             line_vals_list.append(line_vals)
 
@@ -981,6 +1002,194 @@ class JsocrImportJob(models.Model):
         ], limit=1)
 
         return expense_account.id if expense_account else None
+
+    # -------------------------------------------------------------------------
+    # ACCOUNT PREDICTION METHODS (Story 4.16, 4.17)
+    # -------------------------------------------------------------------------
+
+    def _get_supplier_invoice_history(self, partner_id, limit=10):
+        """Get last N posted invoices for a supplier (Story 4.16).
+
+        Args:
+            partner_id (int): Supplier partner ID
+            limit (int): Max number of invoices to retrieve (default 10)
+
+        Returns:
+            account.move recordset: Posted supplier invoices ordered by date desc
+        """
+        return self.env['account.move'].search([
+            ('partner_id', '=', partner_id),
+            ('move_type', '=', 'in_invoice'),
+            ('state', '=', 'posted'),
+        ], order='invoice_date desc, id desc', limit=limit)
+
+    def _get_historical_lines_data(self, partner_id):
+        """Extract all lines with description and account from supplier history (Story 4.16).
+
+        Retrieves line descriptions and their associated expense accounts from
+        the last 10 posted invoices for the given supplier.
+
+        Args:
+            partner_id (int): Supplier partner ID
+
+        Returns:
+            list[dict]: List of {description, account_id, account_code, normalized}
+        """
+        invoices = self._get_supplier_invoice_history(partner_id)
+        if not invoices:
+            return []
+
+        PatternModel = self.env['jsocr.account.pattern']
+        result = []
+
+        for invoice in invoices:
+            for line in invoice.invoice_line_ids:
+                if not line.account_id or not line.name:
+                    continue
+                # Only consider expense-type accounts
+                if line.account_id.account_type not in (
+                    'expense', 'expense_depreciation', 'expense_direct_cost'
+                ):
+                    continue
+
+                result.append({
+                    'description': line.name,
+                    'account_id': line.account_id.id,
+                    'account_code': line.account_id.code,
+                    'normalized': PatternModel.normalize_text(line.name),
+                })
+
+        _logger.info(
+            "JSOCR: Found %d historical lines for partner %s",
+            len(result), partner_id
+        )
+        return result
+
+    def _predict_line_account(self, partner_id, description, historical_lines, fallback_account_id):
+        """Predict the best account for a line description (Story 4.17).
+
+        Priority:
+        1. Exact/partial match from jsocr.account.pattern (learned patterns)
+        2. Similarity matching against historical invoice lines
+        3. Fallback to default expense account
+
+        Args:
+            partner_id (int or None): Supplier partner ID
+            description (str): Line description to match
+            historical_lines (list[dict]): Historical data from _get_historical_lines_data
+            fallback_account_id (int): Fallback account ID
+
+        Returns:
+            tuple: (account_id, confidence, source)
+                - account_id (int): Predicted account ID
+                - confidence (int): Confidence score 0-100
+                - source (str): 'pattern', 'history', or 'default'
+        """
+        if not partner_id or not description:
+            return fallback_account_id, 10, 'default'
+
+        # Step 1: Check learned patterns (Story 4.18)
+        PatternModel = self.env['jsocr.account.pattern']
+        account_id, confidence, source = PatternModel.find_matching_pattern(
+            partner_id, description
+        )
+        if account_id and confidence >= 30:
+            return account_id, confidence, source
+
+        # Step 2: Match against historical lines (Story 4.17)
+        if historical_lines:
+            account_id, confidence = self._match_description_to_history(
+                description, historical_lines
+            )
+            if account_id and confidence >= 30:
+                return account_id, confidence, 'history'
+
+        # Step 3: Fallback
+        return fallback_account_id, 10, 'default'
+
+    def _match_description_to_history(self, description, historical_lines):
+        """Match a description against historical lines using similarity (Story 4.17).
+
+        Uses normalized keyword comparison (Jaccard similarity) to find
+        the best matching account from historical invoice lines.
+
+        Args:
+            description (str): Current line description
+            historical_lines (list[dict]): Historical data with 'normalized' and 'account_id'
+
+        Returns:
+            tuple: (account_id, confidence) or (None, 0)
+        """
+        PatternModel = self.env['jsocr.account.pattern']
+        normalized_desc = PatternModel.normalize_text(description)
+
+        if not normalized_desc:
+            return None, 0
+
+        search_words = set(normalized_desc.split())
+        if not search_words:
+            return None, 0
+
+        # Calculate similarity for each historical line
+        matches = []  # list of (similarity, account_id)
+
+        for hist_line in historical_lines:
+            hist_normalized = hist_line.get('normalized', '')
+            if not hist_normalized:
+                continue
+
+            hist_words = set(hist_normalized.split())
+            if not hist_words:
+                continue
+
+            # Jaccard similarity
+            intersection = len(search_words & hist_words)
+            union = len(search_words | hist_words)
+
+            if union > 0:
+                similarity = intersection / union
+                if similarity > 0.3:  # Minimum threshold
+                    matches.append((similarity, hist_line['account_id']))
+
+        if not matches:
+            return None, 0
+
+        # Count account frequency among matches, weighted by similarity
+        account_scores = {}
+        for similarity, account_id in matches:
+            if account_id not in account_scores:
+                account_scores[account_id] = {'count': 0, 'total_sim': 0.0}
+            account_scores[account_id]['count'] += 1
+            account_scores[account_id]['total_sim'] += similarity
+
+        # Find the best account (highest weighted score)
+        best_account_id = None
+        best_score = 0
+
+        total_matches = len(matches)
+        for account_id, data in account_scores.items():
+            # Score = frequency ratio * average similarity
+            frequency_ratio = data['count'] / total_matches
+            avg_similarity = data['total_sim'] / data['count']
+            score = frequency_ratio * avg_similarity
+
+            if score > best_score:
+                best_score = score
+                best_account_id = account_id
+
+        if best_account_id:
+            # Confidence based on number of matches and score quality
+            confidence = int(min(
+                30 + (min(total_matches, 5) * 10) + (best_score * 20),
+                95
+            ))
+            _logger.info(
+                "JSOCR: History match found, account=%s, confidence=%d, matches=%d",
+                best_account_id, confidence, total_matches
+            )
+            return best_account_id, confidence
+
+        return None, 0
 
     def _attach_pdf_to_invoice(self, invoice):
         """Attach source PDF to the created invoice (Story 4.10 - FR21).
