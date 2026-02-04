@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ===================================================================
+         Inherited Form View for account.move (Supplier Invoice)
+         Stories 5.1, 5.2, 5.3, 5.4
+         =================================================================== -->
+    <record id="view_move_form_jsocr" model="ir.ui.view">
+        <field name="name">account.move.form.jsocr</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+
+            <!-- High Amount Alert Banner (Story 5.3) -->
+            <xpath expr="//sheet" position="inside">
+                <div class="alert alert-danger mb-3" role="alert"
+                     invisible="not jsocr_amount_alert">
+                    <i class="fa fa-exclamation-triangle"/> <strong>Attention:</strong>
+                    Le montant total de cette facture depasse le seuil d'alerte configure.
+                    Veuillez verifier attentivement avant validation.
+                </div>
+            </xpath>
+
+            <!-- JSOCR Info Section - Only visible for OCR invoices -->
+            <xpath expr="//page[@id='other_tab']" position="after">
+
+                <!-- OCR Source PDF Tab (Story 5.1) -->
+                <page string="PDF Source OCR" name="jsocr_pdf"
+                      invisible="not jsocr_import_job_id">
+                    <group>
+                        <group>
+                            <field name="jsocr_import_job_id" readonly="1"/>
+                            <field name="jsocr_source_pdf_filename" readonly="1"
+                                   invisible="not jsocr_source_pdf"/>
+                        </group>
+                        <group>
+                            <field name="jsocr_global_confidence" readonly="1"
+                                   widget="progressbar"
+                                   invisible="jsocr_global_confidence == 0"/>
+                        </group>
+                    </group>
+                    <field name="jsocr_source_pdf" widget="pdf_viewer"
+                           invisible="not jsocr_source_pdf"
+                           style="height: 800px;"/>
+                </page>
+
+                <!-- OCR Confidence Details Tab (Story 5.2) -->
+                <page string="Confiance OCR" name="jsocr_confidence"
+                      invisible="not jsocr_confidence_data">
+                    <group string="Indices de confiance par champ">
+                        <field name="jsocr_confidence_data" readonly="1"
+                               widget="text" nolabel="1"/>
+                    </group>
+                </page>
+            </xpath>
+
+            <!-- Hidden fields needed for computed values -->
+            <xpath expr="//sheet" position="inside">
+                <field name="jsocr_import_job_id" invisible="1"/>
+                <field name="jsocr_confidence_data" invisible="1"/>
+                <field name="jsocr_amount_alert" invisible="1"/>
+                <field name="jsocr_global_confidence" invisible="1"/>
+                <field name="jsocr_source_pdf" invisible="1"/>
+                <field name="jsocr_source_pdf_filename" invisible="1"/>
+            </xpath>
+
+        </field>
+    </record>
+
+    <!-- ===================================================================
+         Inherited Invoice Line Tree (inside form) - Add confidence badge
+         Story 5.2, 5.19
+         =================================================================== -->
+    <record id="view_move_line_form_jsocr" model="ir.ui.view">
+        <field name="name">account.move.line.form.jsocr</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="priority">100</field>
+        <field name="arch" type="xml">
+
+            <!-- Add confidence badge column to invoice lines -->
+            <xpath expr="//field[@name='invoice_line_ids']//list//field[@name='account_id']"
+                   position="after">
+                <field name="jsocr_account_confidence" string="Conf."
+                       optional="hide"
+                       width="60px"
+                       readonly="1"
+                       widget="badge"
+                       decoration-success="jsocr_account_confidence &gt;= 80"
+                       decoration-warning="jsocr_account_confidence &gt;= 50 and jsocr_account_confidence &lt; 80"
+                       decoration-danger="jsocr_account_confidence &gt; 0 and jsocr_account_confidence &lt; 50"/>
+                <field name="jsocr_account_source" string="Source"
+                       optional="hide"
+                       readonly="1"/>
+                <field name="jsocr_predicted_account_id" string="Compte predit"
+                       optional="hide"
+                       readonly="1"/>
+            </xpath>
+
+        </field>
+    </record>
+
+    <!-- ===================================================================
+         Action: OCR Invoices List (Story 5.6, 5.7)
+         =================================================================== -->
+
+    <!-- All OCR invoices - for managers -->
+    <record id="jsocr_invoice_action" model="ir.actions.act_window">
+        <field name="name">Factures OCR</field>
+        <field name="res_model">account.move</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('jsocr_import_job_id', '!=', False), ('move_type', '=', 'in_invoice')]</field>
+        <field name="context">{'default_move_type': 'in_invoice'}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Aucune facture OCR
+            </p>
+            <p>
+                Les factures sont creees automatiquement depuis les jobs d'import OCR.
+            </p>
+        </field>
+    </record>
+
+    <!-- My OCR invoices - for standard users -->
+    <record id="jsocr_invoice_action_mine" model="ir.actions.act_window">
+        <field name="name">Mes factures OCR</field>
+        <field name="res_model">account.move</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('jsocr_import_job_id', '!=', False), ('move_type', '=', 'in_invoice'), ('create_uid', '=', uid)]</field>
+        <field name="context">{'default_move_type': 'in_invoice'}</field>
+    </record>
+
+    <!-- ===================================================================
+         List View for OCR Invoices - with confidence and alert columns
+         =================================================================== -->
+    <record id="jsocr_invoice_view_list" model="ir.ui.view">
+        <field name="name">account.move.list.jsocr</field>
+        <field name="model">account.move</field>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <list string="Factures OCR"
+                  decoration-danger="jsocr_amount_alert"
+                  default_order="invoice_date desc">
+                <field name="name"/>
+                <field name="partner_id" string="Fournisseur"/>
+                <field name="ref" string="Ref. fournisseur"/>
+                <field name="invoice_date"/>
+                <field name="amount_total" string="Total" widget="monetary"/>
+                <field name="jsocr_global_confidence" string="Confiance"
+                       widget="progressbar"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'posted'"
+                       decoration-info="state == 'draft'"/>
+                <field name="jsocr_amount_alert" column_invisible="1"/>
+                <field name="jsocr_import_job_id" string="Job OCR"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Bind the custom list view to the OCR invoice actions -->
+    <record id="jsocr_invoice_action_view_list" model="ir.actions.act_window.view">
+        <field name="sequence">1</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="jsocr_invoice_view_list"/>
+        <field name="act_window_id" ref="jsocr_invoice_action"/>
+    </record>
+
+    <record id="jsocr_invoice_action_mine_view_list" model="ir.actions.act_window.view">
+        <field name="sequence">1</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="jsocr_invoice_view_list"/>
+        <field name="act_window_id" ref="jsocr_invoice_action_mine"/>
+    </record>
+
+</odoo>

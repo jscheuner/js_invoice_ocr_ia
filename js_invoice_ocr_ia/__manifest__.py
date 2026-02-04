@@ -47,6 +47,7 @@ Support natif francais, allemand et anglais (contexte suisse).
         # Views (Story 2.1+)
         'views/jsocr_config_views.xml',
         'views/jsocr_import_job_views.xml',
+        'views/account_move_views.xml',
         'views/menu.xml',
 
         # Data (Story 3.4+)

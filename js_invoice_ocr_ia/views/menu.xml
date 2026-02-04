@@ -34,6 +34,27 @@
               action="jsocr_import_job_action_errors"
               sequence="30"/>
 
+    <!-- OCR Invoices submenu (Story 5.6, 5.7) -->
+    <menuitem id="menu_jsocr_invoices"
+              name="Factures OCR"
+              parent="menu_jsocr_root"
+              sequence="10"/>
+
+    <!-- My OCR invoices (for standard users) -->
+    <menuitem id="menu_jsocr_invoices_mine"
+              name="Mes factures"
+              parent="menu_jsocr_invoices"
+              action="jsocr_invoice_action_mine"
+              sequence="10"/>
+
+    <!-- All OCR invoices (for managers) -->
+    <menuitem id="menu_jsocr_invoices_all"
+              name="Toutes les factures"
+              parent="menu_jsocr_invoices"
+              action="jsocr_invoice_action"
+              groups="js_invoice_ocr_ia.group_jsocr_manager"
+              sequence="20"/>
+
     <!-- Configuration submenu -->
     <menuitem id="menu_jsocr_configuration"
               name="Configuration"

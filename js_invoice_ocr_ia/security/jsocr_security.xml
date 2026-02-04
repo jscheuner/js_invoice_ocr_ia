@@ -32,5 +32,33 @@
             <field name="comment">Accès complet: configuration système, gestion des masques, historique des corrections, paramètres Ollama.</field>
         </record>
 
+        <!-- ============================================================
+             Record Rules (Story 5.6, 5.7)
+             ============================================================ -->
+
+        <!-- User can only see their own import jobs -->
+        <record id="rule_jsocr_import_job_user" model="ir.rule">
+            <field name="name">JSOCR Import Job: User sees own jobs</field>
+            <field name="model_id" ref="model_jsocr_import_job"/>
+            <field name="domain_force">[('create_uid', '=', user.id)]</field>
+            <field name="groups" eval="[(4, ref('group_jsocr_user'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <!-- Manager can see all import jobs (override user rule) -->
+        <record id="rule_jsocr_import_job_manager" model="ir.rule">
+            <field name="name">JSOCR Import Job: Manager sees all</field>
+            <field name="model_id" ref="model_jsocr_import_job"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('group_jsocr_manager'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+
     </data>
 </odoo>

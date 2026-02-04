@@ -107,14 +107,14 @@ development_status:
   # ============================================
   # Epic 5: Validation & Indicateurs (7 stories)
   # ============================================
-  epic-5: backlog
-  5-1-vue-formulaire-facture-pdf: backlog
-  5-2-badges-confiance-champ: backlog
-  5-3-alerte-montant-eleve: backlog
-  5-4-edition-champs-pre-remplis: backlog
-  5-5-validation-facture-brouillon: backlog
-  5-6-droits-utilisateur-standard: backlog
-  5-7-droits-manager: backlog
+  epic-5: done
+  5-1-vue-formulaire-facture-pdf: done
+  5-2-badges-confiance-champ: done
+  5-3-alerte-montant-eleve: done
+  5-4-edition-champs-pre-remplis: done
+  5-5-validation-facture-brouillon: done
+  5-6-droits-utilisateur-standard: done
+  5-7-droits-manager: done
   epic-5-retrospective: optional
 
   # ============================================

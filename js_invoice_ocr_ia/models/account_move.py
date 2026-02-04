@@ -50,6 +50,45 @@ class AccountMove(models.Model):
         help='Filename of the original PDF',
     )
 
+    jsocr_amount_alert = fields.Boolean(
+        string='High Amount Alert',
+        compute='_compute_jsocr_amount_alert',
+        help='True if invoice total exceeds the configured alert threshold',
+    )
+
+    jsocr_global_confidence = fields.Integer(
+        string='Global Confidence',
+        compute='_compute_jsocr_global_confidence',
+        help='Average confidence score across all extracted fields (0-100)',
+    )
+
+    # -------------------------------------------------------------------------
+    # JSOCR COMPUTED FIELDS FOR UI (Story 5.2, 5.3)
+    # -------------------------------------------------------------------------
+
+    @api.depends('amount_total')
+    def _compute_jsocr_amount_alert(self):
+        """Check if invoice total exceeds the configured alert threshold."""
+        config = self.env['jsocr.config'].search([], limit=1)
+        threshold = config.alert_amount_threshold if config else 0
+        for move in self:
+            if not move.jsocr_import_job_id or not threshold:
+                move.jsocr_amount_alert = False
+            else:
+                move.jsocr_amount_alert = move.amount_total > threshold
+
+    @api.depends('jsocr_confidence_data')
+    def _compute_jsocr_global_confidence(self):
+        """Compute average confidence from all fields."""
+        for move in self:
+            confidences = move.get_all_confidences()
+            if confidences:
+                move.jsocr_global_confidence = int(
+                    sum(confidences.values()) / len(confidences)
+                )
+            else:
+                move.jsocr_global_confidence = 0
+
     # -------------------------------------------------------------------------
     # JSOCR CONFIDENCE METHODS
     # -------------------------------------------------------------------------
@@ -347,3 +386,23 @@ class AccountMoveLine(models.Model):
         help='The account originally predicted by OCR. '
              'Used to detect user corrections for learning.',
     )
+
+    jsocr_confidence_badge = fields.Char(
+        string='Confidence',
+        compute='_compute_jsocr_confidence_badge',
+        help='Visual confidence indicator for the predicted account',
+    )
+
+    @api.depends('jsocr_account_confidence')
+    def _compute_jsocr_confidence_badge(self):
+        """Compute a display string for the confidence badge."""
+        for line in self:
+            conf = line.jsocr_account_confidence
+            if not conf:
+                line.jsocr_confidence_badge = ''
+            elif conf >= 80:
+                line.jsocr_confidence_badge = f'{conf}%'
+            elif conf >= 50:
+                line.jsocr_confidence_badge = f'{conf}%'
+            else:
+                line.jsocr_confidence_badge = f'{conf}%'
