@@ -999,18 +999,20 @@ class JsocrImportJob(models.Model):
             return self.partner_id.jsocr_default_account_id.id
 
         # Find generic expense account (6xxx in Swiss plan)
+        # Filter by account_type to exclude Outstanding Receipts/Payments
         # Note: In Odoo 18, account.account no longer has company_id field
         expense_account = self.env['account.account'].search([
             ('code', '=like', '6%'),
-        ], limit=1)
+            ('account_type', 'in', ('expense', 'expense_depreciation', 'expense_direct_cost')),
+        ], order='code', limit=1)
 
         if expense_account:
             return expense_account.id
 
-        # Fallback: any account that can be used for expenses
+        # Fallback: any expense account regardless of code
         expense_account = self.env['account.account'].search([
-            ('account_type', '=', 'expense'),
-        ], limit=1)
+            ('account_type', 'in', ('expense', 'expense_depreciation', 'expense_direct_cost')),
+        ], order='code', limit=1)
 
         return expense_account.id if expense_account else None
 
