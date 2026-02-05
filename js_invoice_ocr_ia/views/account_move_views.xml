@@ -12,6 +12,14 @@
         <field name="priority">99</field>
         <field name="arch" type="xml">
 
+            <!-- Global OCR Confidence in header (Sprint Change 2026-02-05) -->
+            <xpath expr="//header//field[@name='state']" position="before">
+                <field name="jsocr_global_confidence" readonly="1"
+                       widget="progressbar"
+                       invisible="not jsocr_import_job_id or jsocr_global_confidence == 0"
+                       class="w-auto"/>
+            </xpath>
+
             <!-- High Amount Alert Banner (Story 5.3) -->
             <xpath expr="//sheet" position="inside">
                 <div class="alert alert-danger mb-3" role="alert"
@@ -42,11 +50,6 @@
                             <field name="jsocr_import_job_id" readonly="1"/>
                             <field name="jsocr_source_pdf_filename" readonly="1"
                                    invisible="not jsocr_source_pdf"/>
-                        </group>
-                        <group>
-                            <field name="jsocr_global_confidence" readonly="1"
-                                   widget="progressbar"
-                                   invisible="jsocr_global_confidence == 0"/>
                         </group>
                     </group>
                     <field name="jsocr_source_pdf" widget="pdf_viewer"
