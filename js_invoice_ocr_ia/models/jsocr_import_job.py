@@ -1448,8 +1448,8 @@ class JsocrImportJob(models.Model):
     def _attach_pdf_to_invoice(self, invoice):
         """Attach source PDF to the created invoice (Story 4.10 - FR21).
 
-        Creates ir.attachment linked to the invoice and also stores
-        the PDF in the account.move.jsocr_source_pdf field.
+        Creates ir.attachment linked to the invoice so the PDF is
+        visible natively in Odoo's attachment panel.
 
         Args:
             invoice: account.move record
@@ -1459,12 +1459,6 @@ class JsocrImportJob(models.Model):
         if not self.pdf_file:
             _logger.warning("JSOCR: Job %s no PDF file to attach", self.id)
             return
-
-        # Store PDF in invoice field
-        invoice.write({
-            'jsocr_source_pdf': self.pdf_file,
-            'jsocr_source_pdf_filename': self.pdf_filename,
-        })
 
         # Create attachment
         attachment_vals = {

@@ -56,14 +56,6 @@ class TestAccountMoveExtension(TransactionCase):
         """Test: jsocr_confidence_data field exists on account.move."""
         self.assertIn('jsocr_confidence_data', self.Move._fields)
 
-    def test_jsocr_source_pdf_field_exists(self):
-        """Test: jsocr_source_pdf field exists on account.move."""
-        self.assertIn('jsocr_source_pdf', self.Move._fields)
-
-    def test_jsocr_source_pdf_filename_field_exists(self):
-        """Test: jsocr_source_pdf_filename field exists on account.move."""
-        self.assertIn('jsocr_source_pdf_filename', self.Move._fields)
-
     def test_jsocr_import_job_id_indexed(self):
         """Test: jsocr_import_job_id field is indexed."""
         field = self.Move._fields['jsocr_import_job_id']
@@ -341,19 +333,6 @@ class TestAccountMoveExtension(TransactionCase):
         result = self.test_invoice.is_jsocr_invoice()
 
         self.assertFalse(result)
-
-    # -------------------------------------------------------------------------
-    # TEST: jsocr_source_pdf field
-    # -------------------------------------------------------------------------
-
-    def test_jsocr_source_pdf_can_be_set(self):
-        """Test: jsocr_source_pdf can store binary data."""
-        pdf_content = b64encode(b'%PDF-1.4 test content')
-        self.test_invoice.jsocr_source_pdf = pdf_content
-        self.test_invoice.jsocr_source_pdf_filename = 'test.pdf'
-
-        self.assertEqual(self.test_invoice.jsocr_source_pdf, pdf_content)
-        self.assertEqual(self.test_invoice.jsocr_source_pdf_filename, 'test.pdf')
 
     # -------------------------------------------------------------------------
     # TEST: Relationship with import job

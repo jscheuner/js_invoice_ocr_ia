@@ -12,8 +12,8 @@ _logger = logging.getLogger(__name__)
 class AccountMove(models.Model):
     """Extension of account.move with JSOCR fields for OCR-created invoices.
 
-    This extension adds fields to track the OCR import job, confidence scores,
-    and the original PDF source for invoices created via OCR processing.
+    This extension adds fields to track the OCR import job and confidence scores
+    for invoices created via OCR processing.
     """
 
     _inherit = 'account.move'
@@ -37,17 +37,6 @@ class AccountMove(models.Model):
              'Standard fields: supplier, date, invoice_number, total, subtotal, tax_amount. '
              'Example: {"supplier": {"value": "ACME Corp", "confidence": 95}, '
              '"date": {"value": "2026-01-15", "confidence": 88}}',
-    )
-
-    jsocr_source_pdf = fields.Binary(
-        string='JSOCR Source PDF',
-        attachment=True,
-        help='Original PDF file from which this invoice was extracted',
-    )
-
-    jsocr_source_pdf_filename = fields.Char(
-        string='JSOCR Source PDF Filename',
-        help='Filename of the original PDF',
     )
 
     jsocr_amount_alert = fields.Boolean(

@@ -42,21 +42,6 @@
             <!-- JSOCR Info Section - Only visible for OCR invoices -->
             <xpath expr="//page[@id='other_tab']" position="after">
 
-                <!-- OCR Source PDF Tab (Story 5.1) -->
-                <page string="PDF Source OCR" name="jsocr_pdf"
-                      invisible="not jsocr_import_job_id">
-                    <group>
-                        <group>
-                            <field name="jsocr_import_job_id" readonly="1"/>
-                            <field name="jsocr_source_pdf_filename" readonly="1"
-                                   invisible="not jsocr_source_pdf"/>
-                        </group>
-                    </group>
-                    <field name="jsocr_source_pdf" widget="pdf_viewer"
-                           invisible="not jsocr_source_pdf"
-                           style="height: 800px;"/>
-                </page>
-
                 <!-- OCR Confidence Details Tab (Story 5.2) -->
                 <page string="Confiance OCR" name="jsocr_confidence"
                       invisible="not jsocr_confidence_data">
@@ -74,8 +59,6 @@
                 <field name="jsocr_amount_alert" invisible="1"/>
                 <field name="jsocr_amount_mismatch" invisible="1"/>
                 <field name="jsocr_global_confidence" invisible="1"/>
-                <field name="jsocr_source_pdf" invisible="1"/>
-                <field name="jsocr_source_pdf_filename" invisible="1"/>
             </xpath>
 
         </field>
