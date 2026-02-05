@@ -359,11 +359,13 @@ REPONDS UNIQUEMENT avec un objet JSON valide (sans texte avant ou apres):
         confidence = {}
 
         # Supplier name confidence (Story 4.3)
+        # Base scores are conservative; they get boosted after Odoo partner
+        # resolution in _store_extracted_data (jsocr_import_job.py).
         supplier = data.get('supplier_name')
         if supplier and isinstance(supplier, str) and len(supplier.strip()) > 2:
-            confidence['supplier'] = {'value': supplier, 'confidence': 85}
+            confidence['supplier'] = {'value': supplier, 'confidence': 60}
         elif supplier:
-            confidence['supplier'] = {'value': supplier, 'confidence': 50}
+            confidence['supplier'] = {'value': supplier, 'confidence': 40}
         else:
             confidence['supplier'] = {'value': None, 'confidence': 0}
 
@@ -595,14 +597,15 @@ REPONDS UNIQUEMENT avec un objet JSON valide (sans texte avant ou apres):
             supplier_name (str): Supplier name from AI extraction
 
         Returns:
-            res.partner recordset or False
+            tuple: (res.partner recordset or False, match_type str or None)
+                   match_type is 'exact', 'partial', 'alias', or None
         """
         if not supplier_name:
-            return False
+            return False, None
 
         supplier_name = supplier_name.strip()
         if not supplier_name:
-            return False
+            return False, None
 
         Partner = env['res.partner']
 
@@ -614,7 +617,7 @@ REPONDS UNIQUEMENT avec un objet JSON valide (sans texte avant ou apres):
 
         if partner:
             _logger.info("JSOCR: Found supplier by exact name match")
-            return partner
+            return partner, 'exact'
 
         # Try partial name match
         partner = Partner.search([
@@ -624,16 +627,16 @@ REPONDS UNIQUEMENT avec un objet JSON valide (sans texte avant ou apres):
 
         if partner:
             _logger.info("JSOCR: Found supplier by partial name match")
-            return partner
+            return partner, 'partial'
 
         # Try alias match
         partner = Partner.find_by_alias(supplier_name)
         if partner:
             _logger.info("JSOCR: Found supplier by alias match")
-            return partner
+            return partner, 'alias'
 
         _logger.info("JSOCR: No supplier found for extracted name")
-        return False
+        return False, None
 
     # -------------------------------------------------------------------------
     # DATE PARSING (Story 4.4)

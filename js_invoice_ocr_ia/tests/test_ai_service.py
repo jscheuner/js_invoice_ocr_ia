@@ -504,37 +504,49 @@ class TestSupplierMatching(TransactionCase):
         })
 
     def test_find_supplier_exact_match(self):
-        """Test finding supplier by exact name."""
+        """Test finding supplier by exact name returns (partner, 'exact')."""
         service = self.OllamaService()
-        partner = service.find_supplier(self.env, 'Muller AG')
+        partner, match_type = service.find_supplier(self.env, 'Muller AG')
 
         self.assertEqual(partner, self.partner_exact)
+        self.assertEqual(match_type, 'exact')
 
     def test_find_supplier_partial_match(self):
-        """Test finding supplier by partial name."""
+        """Test finding supplier by partial name returns (partner, 'partial')."""
         service = self.OllamaService()
-        partner = service.find_supplier(self.env, 'Muller')
+        partner, match_type = service.find_supplier(self.env, 'Muller')
 
         self.assertEqual(partner, self.partner_exact)
+        self.assertEqual(match_type, 'partial')
 
     def test_find_supplier_by_alias(self):
-        """Test finding supplier by alias."""
+        """Test finding supplier by alias returns (partner, 'alias')."""
         service = self.OllamaService()
-        partner = service.find_supplier(self.env, 'Schneider Suisse')
+        partner, match_type = service.find_supplier(self.env, 'Schneider Suisse')
 
         self.assertEqual(partner, self.partner_alias)
+        self.assertEqual(match_type, 'alias')
 
     def test_find_supplier_not_found(self):
-        """Test finding non-existent supplier."""
+        """Test finding non-existent supplier returns (False, None)."""
         service = self.OllamaService()
-        partner = service.find_supplier(self.env, 'Unknown Company XYZ')
+        partner, match_type = service.find_supplier(self.env, 'Unknown Company XYZ')
 
         self.assertFalse(partner)
+        self.assertIsNone(match_type)
 
     def test_find_supplier_empty_name(self):
-        """Test finding supplier with empty name."""
+        """Test finding supplier with empty name returns (False, None)."""
         service = self.OllamaService()
 
-        self.assertFalse(service.find_supplier(self.env, ''))
-        self.assertFalse(service.find_supplier(self.env, None))
-        self.assertFalse(service.find_supplier(self.env, '   '))
+        partner, match_type = service.find_supplier(self.env, '')
+        self.assertFalse(partner)
+        self.assertIsNone(match_type)
+
+        partner, match_type = service.find_supplier(self.env, None)
+        self.assertFalse(partner)
+        self.assertIsNone(match_type)
+
+        partner, match_type = service.find_supplier(self.env, '   ')
+        self.assertFalse(partner)
+        self.assertIsNone(match_type)

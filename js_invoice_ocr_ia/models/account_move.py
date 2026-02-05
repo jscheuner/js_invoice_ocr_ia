@@ -58,6 +58,29 @@ class AccountMove(models.Model):
         help='Average confidence score across all extracted fields (0-100)',
     )
 
+    # Per-field confidence detail fields (computed from JSON)
+    jsocr_conf_supplier = fields.Integer(
+        compute='_compute_jsocr_conf_details', string='Fournisseur',
+    )
+    jsocr_conf_date = fields.Integer(
+        compute='_compute_jsocr_conf_details', string='Date',
+    )
+    jsocr_conf_invoice_number = fields.Integer(
+        compute='_compute_jsocr_conf_details', string='N° facture',
+    )
+    jsocr_conf_lines = fields.Integer(
+        compute='_compute_jsocr_conf_details', string='Lignes',
+    )
+    jsocr_conf_amount_untaxed = fields.Integer(
+        compute='_compute_jsocr_conf_details', string='Montant HT',
+    )
+    jsocr_conf_amount_tax = fields.Integer(
+        compute='_compute_jsocr_conf_details', string='TVA',
+    )
+    jsocr_conf_amount_total = fields.Integer(
+        compute='_compute_jsocr_conf_details', string='Total',
+    )
+
     # -------------------------------------------------------------------------
     # JSOCR COMPUTED FIELDS FOR UI (Story 5.2, 5.3)
     # -------------------------------------------------------------------------
@@ -84,6 +107,37 @@ class AccountMove(models.Model):
                 )
             else:
                 move.jsocr_global_confidence = 0
+
+    @api.depends('jsocr_confidence_data')
+    def _compute_jsocr_conf_details(self):
+        """Compute individual confidence fields from JSON data."""
+        field_map = {
+            'supplier': 'jsocr_conf_supplier',
+            'date': 'jsocr_conf_date',
+            'invoice_number': 'jsocr_conf_invoice_number',
+            'lines': 'jsocr_conf_lines',
+            'amount_untaxed': 'jsocr_conf_amount_untaxed',
+            'amount_tax': 'jsocr_conf_amount_tax',
+            'amount_total': 'jsocr_conf_amount_total',
+        }
+        for move in self:
+            data = {}
+            if move.jsocr_confidence_data:
+                try:
+                    data = json.loads(move.jsocr_confidence_data)
+                    if not isinstance(data, dict):
+                        data = {}
+                except (json.JSONDecodeError, TypeError):
+                    data = {}
+            for json_key, field_name in field_map.items():
+                conf = 0
+                entry = data.get(json_key)
+                if isinstance(entry, dict):
+                    try:
+                        conf = int(entry.get('confidence', 0))
+                    except (ValueError, TypeError):
+                        conf = 0
+                setattr(move, field_name, conf)
 
     # -------------------------------------------------------------------------
     # JSOCR CONFIDENCE METHODS

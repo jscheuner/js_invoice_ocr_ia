@@ -46,8 +46,17 @@
                 <page string="Confiance OCR" name="jsocr_confidence"
                       invisible="not jsocr_confidence_data">
                     <group string="Indices de confiance par champ">
-                        <field name="jsocr_confidence_data" readonly="1"
-                               widget="text" nolabel="1"/>
+                        <group>
+                            <field name="jsocr_conf_supplier" widget="progressbar"/>
+                            <field name="jsocr_conf_date" widget="progressbar"/>
+                            <field name="jsocr_conf_invoice_number" widget="progressbar"/>
+                            <field name="jsocr_conf_lines" widget="progressbar"/>
+                        </group>
+                        <group>
+                            <field name="jsocr_conf_amount_untaxed" widget="progressbar"/>
+                            <field name="jsocr_conf_amount_tax" widget="progressbar"/>
+                            <field name="jsocr_conf_amount_total" widget="progressbar"/>
+                        </group>
                     </group>
                 </page>
             </xpath>

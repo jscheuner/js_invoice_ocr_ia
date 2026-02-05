@@ -788,11 +788,15 @@ class JsocrImportJob(models.Model):
         supplier_name = data.get('supplier_name')
         self.extracted_supplier_name = supplier_name
 
-        # Find matching Odoo partner
+        # Find matching Odoo partner and boost supplier confidence
+        match_type = None
         if supplier_name:
-            partner = ollama_service.find_supplier(self.env, supplier_name)
+            partner, match_type = ollama_service.find_supplier(self.env, supplier_name)
             if partner:
                 self.partner_id = partner.id
+
+        # Boost supplier confidence based on Odoo resolution and masks
+        self._boost_supplier_confidence(supplier_name, match_type)
 
         # Date (Story 4.4)
         date_str = data.get('invoice_date')
@@ -811,6 +815,58 @@ class JsocrImportJob(models.Model):
         self.extracted_amount_untaxed = ollama_service._parse_amount(data.get('amount_untaxed')) or 0.0
         self.extracted_amount_tax = ollama_service._parse_amount(data.get('amount_tax')) or 0.0
         self.extracted_amount_total = ollama_service._parse_amount(data.get('amount_total')) or 0.0
+
+    def _boost_supplier_confidence(self, supplier_name, match_type):
+        """Recalculate supplier confidence based on Odoo partner resolution.
+
+        Boosts the base AI confidence score using partner match quality
+        and existence of extraction masks.
+
+        Args:
+            supplier_name (str or None): Extracted supplier name
+            match_type (str or None): 'exact', 'partial', 'alias', or None
+        """
+        self.ensure_one()
+
+        if not self.confidence_data:
+            return
+
+        try:
+            conf_data = json.loads(self.confidence_data)
+            if not isinstance(conf_data, dict):
+                return
+        except (json.JSONDecodeError, TypeError):
+            return
+
+        # Determine new supplier confidence
+        if self.partner_id:
+            has_mask = self.env['jsocr.mask'].get_mask_for_partner(self.partner_id.id)
+            if has_mask:
+                new_conf = 98
+            elif match_type in ('exact', 'alias'):
+                new_conf = 92
+            else:  # partial
+                new_conf = 85
+        elif supplier_name and len(supplier_name.strip()) > 2:
+            new_conf = 60
+        elif supplier_name:
+            new_conf = 40
+        else:
+            new_conf = 0
+
+        # Update the supplier entry in confidence_data
+        supplier_entry = conf_data.get('supplier', {})
+        if isinstance(supplier_entry, dict):
+            supplier_entry['confidence'] = new_conf
+        else:
+            supplier_entry = {'value': supplier_name, 'confidence': new_conf}
+        conf_data['supplier'] = supplier_entry
+
+        self.confidence_data = json.dumps(conf_data)
+        _logger.info(
+            "JSOCR: Job %s supplier confidence boosted to %d%% (match_type=%s)",
+            self.id, new_conf, match_type,
+        )
 
     # -------------------------------------------------------------------------
     # INVOICE CREATION METHODS (Story 4.8-4.10)

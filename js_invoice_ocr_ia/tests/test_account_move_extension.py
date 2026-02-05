@@ -380,3 +380,50 @@ class TestAccountMoveExtension(TransactionCase):
         # Get specific values
         self.assertEqual(self.test_invoice.get_field_value('supplier'), 'ACME Corp')
         self.assertEqual(self.test_invoice.get_field_confidence('supplier'), 95)
+
+    # -------------------------------------------------------------------------
+    # TEST: Computed confidence detail fields (_compute_jsocr_conf_details)
+    # -------------------------------------------------------------------------
+
+    def test_conf_details_all_fields(self):
+        """Test: computed fields extract all confidence values from JSON."""
+        self.test_invoice.jsocr_confidence_data = json.dumps({
+            'supplier': {'value': 'Test', 'confidence': 92},
+            'date': {'value': '2026-01-15', 'confidence': 88},
+            'invoice_number': {'value': 'INV-001', 'confidence': 90},
+            'lines': {'value': 3, 'confidence': 85},
+            'amount_untaxed': {'value': 100, 'confidence': 98},
+            'amount_tax': {'value': 7.7, 'confidence': 98},
+            'amount_total': {'value': 107.7, 'confidence': 98},
+        })
+
+        self.assertEqual(self.test_invoice.jsocr_conf_supplier, 92)
+        self.assertEqual(self.test_invoice.jsocr_conf_date, 88)
+        self.assertEqual(self.test_invoice.jsocr_conf_invoice_number, 90)
+        self.assertEqual(self.test_invoice.jsocr_conf_lines, 85)
+        self.assertEqual(self.test_invoice.jsocr_conf_amount_untaxed, 98)
+        self.assertEqual(self.test_invoice.jsocr_conf_amount_tax, 98)
+        self.assertEqual(self.test_invoice.jsocr_conf_amount_total, 98)
+
+    def test_conf_details_no_data(self):
+        """Test: computed fields return 0 when no confidence data."""
+        self.assertEqual(self.test_invoice.jsocr_conf_supplier, 0)
+        self.assertEqual(self.test_invoice.jsocr_conf_date, 0)
+        self.assertEqual(self.test_invoice.jsocr_conf_amount_total, 0)
+
+    def test_conf_details_partial_data(self):
+        """Test: computed fields return 0 for missing keys."""
+        self.test_invoice.jsocr_confidence_data = json.dumps({
+            'supplier': {'value': 'Test', 'confidence': 85},
+        })
+
+        self.assertEqual(self.test_invoice.jsocr_conf_supplier, 85)
+        self.assertEqual(self.test_invoice.jsocr_conf_date, 0)
+        self.assertEqual(self.test_invoice.jsocr_conf_lines, 0)
+
+    def test_conf_details_invalid_json(self):
+        """Test: computed fields handle invalid JSON gracefully."""
+        self.test_invoice.jsocr_confidence_data = 'not valid json'
+
+        self.assertEqual(self.test_invoice.jsocr_conf_supplier, 0)
+        self.assertEqual(self.test_invoice.jsocr_conf_amount_total, 0)
