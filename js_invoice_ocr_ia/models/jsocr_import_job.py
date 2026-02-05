@@ -892,6 +892,9 @@ class JsocrImportJob(models.Model):
         # Add invoice lines (Story 4.9)
         self._create_invoice_lines(invoice)
 
+        # Validate total after lines creation (HT/TTC validation)
+        self._validate_invoice_total(invoice)
+
         # Attach PDF source (Story 4.10)
         self._attach_pdf_to_invoice(invoice)
 
@@ -912,6 +915,8 @@ class JsocrImportJob(models.Model):
         2. Historical invoice lines from last 10 invoices
         3. Supplier's default charge account (fallback)
         4. Generic expense account (last resort)
+
+        Also performs HT/TTC detection and price adjustment based on tax expectations.
 
         Lines are created via invoice_line_ids command tuples to ensure
         proper Odoo 18 compute field triggering.
@@ -940,6 +945,12 @@ class JsocrImportJob(models.Model):
             _logger.warning("JSOCR: Job %s no expense account found, skipping lines", self.id)
             return
 
+        # Detect amounts type (HT/TTC) BEFORE creating lines
+        amounts_type = self._detect_amounts_type(lines)
+        if amounts_type == 'unknown':
+            _logger.warning("JSOCR: Job %s HT/TTC detection inconclusive", self.id)
+            invoice.jsocr_amount_mismatch = True
+
         # Get historical data for prediction (Story 4.16)
         historical_lines = []
         if self.partner_id:
@@ -967,10 +978,19 @@ class JsocrImportJob(models.Model):
                 confidence = 10
                 source = 'default'
 
+            # Get original price
+            original_price = line.get('unit_price', 0.0)
+
+            # Get tax info for predicted account and adjust price if needed
+            tax_info = self._get_tax_for_account(account_id)
+            adjusted_price, was_adjusted = self._adjust_price_unit(
+                original_price, amounts_type, tax_info
+            )
+
             line_vals = {
                 'name': description,
                 'quantity': line.get('quantity', 1.0),
-                'price_unit': line.get('unit_price', 0.0),
+                'price_unit': adjusted_price,
                 'account_id': account_id,
                 'jsocr_account_confidence': confidence,
                 'jsocr_account_source': source,
@@ -1119,6 +1139,227 @@ class JsocrImportJob(models.Model):
 
         # Step 3: Fallback
         return fallback_account_id, 10, 'default'
+
+    # -------------------------------------------------------------------------
+    # HT/TTC DETECTION AND CONVERSION METHODS
+    # -------------------------------------------------------------------------
+
+    def _detect_amounts_type(self, lines):
+        """Detect if extracted amounts are HT (untaxed) or TTC (tax-included).
+
+        Compares sum of (unit_price * quantity) against extracted totals.
+        Uses absolute values to handle credit notes with negative quantities.
+
+        Args:
+            lines (list[dict]): Extracted invoice lines with 'unit_price' and 'quantity'
+
+        Returns:
+            str: 'ht' if amounts match untaxed total, 'ttc' if match total,
+                 'unknown' if no match or data insufficient
+        """
+        self.ensure_one()
+
+        # Guard clause: empty lines
+        if not lines:
+            _logger.debug("JSOCR: Job %s _detect_amounts_type: no lines", self.id)
+            return 'unknown'
+
+        # Calculate sum of line amounts (absolute values for credit notes)
+        sum_lines = sum(
+            abs(line.get('unit_price', 0.0) * line.get('quantity', 1.0))
+            for line in lines
+        )
+
+        # Guard clause: no extracted totals
+        untaxed = self.extracted_amount_untaxed or 0.0
+        total = self.extracted_amount_total or 0.0
+
+        if untaxed == 0.0 and total == 0.0:
+            _logger.debug("JSOCR: Job %s _detect_amounts_type: no extracted totals", self.id)
+            return 'unknown'
+
+        tolerance = 0.03
+
+        # Compare with untaxed first (HT) - explicit order per spec
+        if untaxed > 0.0 and abs(sum_lines - untaxed) <= tolerance:
+            _logger.info(
+                "JSOCR: Job %s detected amounts as HT (sum=%.2f, untaxed=%.2f)",
+                self.id, sum_lines, untaxed
+            )
+            return 'ht'
+
+        # Then compare with total (TTC)
+        if total > 0.0 and abs(sum_lines - total) <= tolerance:
+            _logger.info(
+                "JSOCR: Job %s detected amounts as TTC (sum=%.2f, total=%.2f)",
+                self.id, sum_lines, total
+            )
+            return 'ttc'
+
+        # No match
+        _logger.warning(
+            "JSOCR: Job %s amounts type unknown (sum=%.2f, untaxed=%.2f, total=%.2f)",
+            self.id, sum_lines, untaxed, total
+        )
+        return 'unknown'
+
+    def _get_tax_for_account(self, account_id):
+        """Get tax information for a given account.
+
+        Reads the account's default taxes and determines:
+        - Combined tax rate (sum of all purchase tax rates)
+        - Whether taxes expect TTC amounts (price_include_override or price_include)
+
+        Args:
+            account_id (int or None): Account ID to check
+
+        Returns:
+            dict or None: {'tax_expects_ttc': bool, 'tax_rate': float} or None if no taxes
+        """
+        self.ensure_one()
+
+        # Guard clause: invalid account_id
+        if not account_id:
+            return None
+
+        account = self.env['account.account'].browse(account_id)
+
+        # Guard clause: account doesn't exist
+        if not account.exists():
+            return None
+
+        # Filter for purchase taxes
+        purchase_taxes = account.tax_ids.filtered(
+            lambda t: t.type_tax_use in ('purchase', 'none')
+        )
+
+        if not purchase_taxes:
+            return None
+
+        # Calculate combined tax rate (F3 - multi-taxes)
+        total_rate = sum(tax.amount for tax in purchase_taxes)
+
+        # Determine if any tax expects TTC (F8 - fallback on price_include)
+        any_tax_expects_ttc = any(
+            tax.price_include_override == 'tax_included'
+            or (not tax.price_include_override and tax.price_include)
+            for tax in purchase_taxes
+        )
+
+        _logger.debug(
+            "JSOCR: Account %s tax info: rate=%.2f%%, expects_ttc=%s",
+            account_id, total_rate, any_tax_expects_ttc
+        )
+
+        return {
+            'tax_expects_ttc': any_tax_expects_ttc,
+            'tax_rate': total_rate,
+        }
+
+    def _adjust_price_unit(self, price_unit, amounts_type, tax_info):
+        """Adjust price_unit based on amounts type and tax expectations.
+
+        Converts:
+        - HT to TTC if tax expects TTC: price * (1 + rate/100)
+        - TTC to HT if tax expects HT: price / (1 + rate/100)
+
+        Args:
+            price_unit (float): Original price from extraction
+            amounts_type (str): 'ht', 'ttc', or 'unknown'
+            tax_info (dict or None): From _get_tax_for_account
+
+        Returns:
+            tuple: (adjusted_price, was_adjusted)
+        """
+        # No tax info - no adjustment
+        if tax_info is None:
+            return (price_unit, False)
+
+        # Unknown type - no adjustment
+        if amounts_type == 'unknown':
+            return (price_unit, False)
+
+        # Guard clause: division by zero (F1)
+        divisor = 1 + tax_info['tax_rate'] / 100
+        if divisor <= 0:
+            _logger.warning(
+                "JSOCR: Invalid tax rate %.2f, skipping conversion",
+                tax_info['tax_rate']
+            )
+            return (price_unit, False)
+
+        original_price = price_unit
+        was_adjusted = False
+
+        # Only convert if tax rate > 0 (0% tax means no actual conversion needed)
+        if tax_info['tax_rate'] > 0:
+            # HT amounts but tax expects TTC -> convert to TTC
+            if amounts_type == 'ht' and tax_info['tax_expects_ttc']:
+                price_unit = price_unit * divisor
+                was_adjusted = True
+
+            # TTC amounts but tax expects HT -> convert to HT
+            elif amounts_type == 'ttc' and not tax_info['tax_expects_ttc']:
+                price_unit = price_unit / divisor
+                was_adjusted = True
+
+        # Round to 2 decimals
+        price_unit = round(price_unit, 2)
+
+        if was_adjusted:
+            _logger.info(
+                "JSOCR: Adjusted price %.2f -> %.2f (type=%s, tax_rate=%.2f%%, expects_ttc=%s)",
+                original_price, price_unit, amounts_type,
+                tax_info['tax_rate'], tax_info['tax_expects_ttc']
+            )
+
+        return (price_unit, was_adjusted)
+
+    def _validate_invoice_total(self, invoice):
+        """Validate computed invoice total against extracted total.
+
+        Compares invoice.amount_total with extracted_amount_total using
+        fixed tolerance of 0.03.
+
+        Args:
+            invoice: account.move record
+
+        Returns:
+            bool: True if valid (within tolerance or no reference), False if mismatch
+        """
+        self.ensure_one()
+
+        # Guard clause: no extracted total (F6)
+        if not self.extracted_amount_total:
+            _logger.debug("JSOCR: Job %s no extracted_amount_total for validation", self.id)
+            return True
+
+        ecart = abs(invoice.amount_total - self.extracted_amount_total)
+        tolerance = 0.03
+
+        if ecart <= tolerance:
+            _logger.debug(
+                "JSOCR: Job %s total validation OK (computed=%.2f, extracted=%.2f, ecart=%.2f)",
+                self.id, invoice.amount_total, self.extracted_amount_total, ecart
+            )
+            # Reset mismatch flag if validation passes (may have been set by unknown detection)
+            invoice.jsocr_amount_mismatch = False
+            return True
+
+        # Mismatch detected
+        _logger.warning(
+            "JSOCR: Job %s total mismatch (computed=%.2f, extracted=%.2f, ecart=%.2f)",
+            self.id, invoice.amount_total, self.extracted_amount_total, ecart
+        )
+
+        invoice.jsocr_amount_mismatch = True
+
+        # Calculate confidence: 50 if small ecart, 30 if larger
+        confidence = 50 if ecart < 1.0 else 30
+        if not invoice.set_field_confidence('total', self.extracted_amount_total, confidence):
+            _logger.warning("JSOCR: Job %s failed to set confidence for total", self.id)
+
+        return False
 
     def _match_description_to_history(self, description, historical_lines):
         """Match a description against historical lines using similarity (Story 4.17).

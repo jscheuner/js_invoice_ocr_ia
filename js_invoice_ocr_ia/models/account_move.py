@@ -56,6 +56,13 @@ class AccountMove(models.Model):
         help='True if invoice total exceeds the configured alert threshold',
     )
 
+    jsocr_amount_mismatch = fields.Boolean(
+        string='Amount Mismatch',
+        default=False,
+        help='True if extracted total differs from computed total by more than 0.03, '
+             'or if HT/TTC detection was inconclusive',
+    )
+
     jsocr_global_confidence = fields.Integer(
         string='Global Confidence',
         compute='_compute_jsocr_global_confidence',
@@ -277,6 +284,74 @@ class AccountMove(models.Model):
         """
         self.ensure_one()
         return bool(self.jsocr_import_job_id)
+
+    def action_revalidate_jsocr_total(self):
+        """Revalidate invoice total against extracted total.
+
+        Button action to clear the mismatch flag if the user has manually
+        corrected the invoice lines and the total now matches.
+
+        Returns:
+            dict: Notification action with result message
+        """
+        self.ensure_one()
+
+        if not self.jsocr_import_job_id:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Non applicable',
+                    'message': 'Cette facture n\'est pas issue de l\'OCR.',
+                    'type': 'warning',
+                    'sticky': False,
+                }
+            }
+
+        job = self.jsocr_import_job_id
+        extracted_total = job.extracted_amount_total
+
+        if not extracted_total:
+            self.jsocr_amount_mismatch = False
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Validation OK',
+                    'message': 'Pas de total extrait a comparer. Flag efface.',
+                    'type': 'success',
+                    'sticky': False,
+                }
+            }
+
+        ecart = abs(self.amount_total - extracted_total)
+        tolerance = 0.03
+
+        if ecart <= tolerance:
+            self.jsocr_amount_mismatch = False
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Validation OK',
+                    'message': f'Total correct (ecart: {ecart:.2f} CHF). Flag efface.',
+                    'type': 'success',
+                    'sticky': False,
+                }
+            }
+        else:
+            self.jsocr_amount_mismatch = True
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Ecart detecte',
+                    'message': f'Ecart de {ecart:.2f} CHF entre total calcule ({self.amount_total:.2f}) '
+                               f'et total extrait ({extracted_total:.2f}).',
+                    'type': 'warning',
+                    'sticky': True,
+                }
+            }
 
     # -------------------------------------------------------------------------
     # LEARNING HOOK (Story 4.20)
