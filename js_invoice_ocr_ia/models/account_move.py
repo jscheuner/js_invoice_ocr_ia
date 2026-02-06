@@ -81,6 +81,17 @@ class AccountMove(models.Model):
         compute='_compute_jsocr_conf_details', string='Total',
     )
 
+    # Badge fields for inline display (Char "XX%" with colored badge widget)
+    jsocr_conf_supplier_badge = fields.Char(
+        compute='_compute_jsocr_conf_badges', string='Fournisseur',
+    )
+    jsocr_conf_date_badge = fields.Char(
+        compute='_compute_jsocr_conf_badges', string='Date',
+    )
+    jsocr_conf_invoice_number_badge = fields.Char(
+        compute='_compute_jsocr_conf_badges', string='N° facture',
+    )
+
     # -------------------------------------------------------------------------
     # JSOCR COMPUTED FIELDS FOR UI (Story 5.2, 5.3)
     # -------------------------------------------------------------------------
@@ -138,6 +149,20 @@ class AccountMove(models.Model):
                     except (ValueError, TypeError):
                         conf = 0
                 setattr(move, field_name, conf)
+
+    @api.depends('jsocr_confidence_data')
+    def _compute_jsocr_conf_badges(self):
+        """Compute badge strings ('XX%') for inline confidence display."""
+        for move in self:
+            move.jsocr_conf_supplier_badge = (
+                f"{move.jsocr_conf_supplier}%" if move.jsocr_conf_supplier else ''
+            )
+            move.jsocr_conf_date_badge = (
+                f"{move.jsocr_conf_date}%" if move.jsocr_conf_date else ''
+            )
+            move.jsocr_conf_invoice_number_badge = (
+                f"{move.jsocr_conf_invoice_number}%" if move.jsocr_conf_invoice_number else ''
+            )
 
     # -------------------------------------------------------------------------
     # JSOCR CONFIDENCE METHODS
