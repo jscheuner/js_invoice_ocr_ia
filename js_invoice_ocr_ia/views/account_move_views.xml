@@ -37,24 +37,37 @@
                             class="btn btn-sm btn-primary ms-3"
                             string="Revalider le total"/>
                 </div>
+            </xpath>
 
-                <!-- Per-field confidence badges (inline) -->
-                <div class="d-flex align-items-center gap-3 mb-3 small"
-                     invisible="not jsocr_confidence_data">
-                    <span class="text-muted fw-bold">Confiance IA :</span>
-                    <span class="text-muted">Fournisseur</span>
-                    <field name="jsocr_conf_supplier_badge" widget="badge" nolabel="1"
-                           invisible="not jsocr_conf_supplier_badge"
-                           decoration-success="jsocr_conf_supplier &gt;= 95"
-                           decoration-warning="jsocr_conf_supplier &gt;= 90 and jsocr_conf_supplier &lt; 95"
-                           decoration-danger="jsocr_conf_supplier &lt; 90"/>
-                    <span class="text-muted ms-2">Date</span>
+            <!-- Inline confidence badge next to partner_id field (inside o_col) -->
+            <xpath expr="//div[hasclass('o_col')]//field[@name='partner_id']" position="after">
+                <field name="jsocr_conf_supplier_badge" widget="badge" nolabel="1"
+                       class="mt-1"
+                       invisible="not jsocr_conf_supplier_badge"
+                       decoration-success="jsocr_conf_supplier &gt;= 95"
+                       decoration-warning="jsocr_conf_supplier &gt;= 90 and jsocr_conf_supplier &lt; 95"
+                       decoration-danger="jsocr_conf_supplier &lt; 90"/>
+            </xpath>
+
+            <!-- Inline confidence badge next to invoice_date (purchase bill) -->
+            <xpath expr="(//field[@name='invoice_date'])[2]" position="replace">
+                <div class="o_row">
+                    <field name="invoice_date" nolabel="1" options="{'warn_future': true}"
+                           invisible="move_type not in ('in_invoice', 'in_refund', 'in_receipt')"
+                           readonly="state != 'draft'"/>
                     <field name="jsocr_conf_date_badge" widget="badge" nolabel="1"
                            invisible="not jsocr_conf_date_badge"
                            decoration-success="jsocr_conf_date &gt;= 95"
                            decoration-warning="jsocr_conf_date &gt;= 90 and jsocr_conf_date &lt; 95"
                            decoration-danger="jsocr_conf_date &lt; 90"/>
-                    <span class="text-muted ms-2">N° facture</span>
+                </div>
+            </xpath>
+
+            <!-- Inline confidence badge next to ref (bill reference) -->
+            <xpath expr="//field[@name='ref'][@nolabel='1']" position="replace">
+                <div class="o_row">
+                    <field name="ref" default_focus="1" nolabel="1"
+                           invisible="move_type not in ('in_invoice', 'in_receipt', 'in_refund')"/>
                     <field name="jsocr_conf_invoice_number_badge" widget="badge" nolabel="1"
                            invisible="not jsocr_conf_invoice_number_badge"
                            decoration-success="jsocr_conf_invoice_number &gt;= 95"
