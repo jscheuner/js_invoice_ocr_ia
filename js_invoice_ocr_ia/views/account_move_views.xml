@@ -76,6 +76,31 @@
                 </div>
             </xpath>
 
+            <!-- Inline confidence badges next to amount totals -->
+            <xpath expr="//field[@name='tax_totals']" position="after">
+                <div class="d-flex gap-3 small mt-1"
+                     invisible="not jsocr_confidence_data">
+                    <span class="text-muted">HT</span>
+                    <field name="jsocr_conf_amount_untaxed_badge" widget="badge" nolabel="1"
+                           invisible="not jsocr_conf_amount_untaxed_badge"
+                           decoration-success="jsocr_conf_amount_untaxed &gt;= 95"
+                           decoration-warning="jsocr_conf_amount_untaxed &gt;= 90 and jsocr_conf_amount_untaxed &lt; 95"
+                           decoration-danger="jsocr_conf_amount_untaxed &lt; 90"/>
+                    <span class="text-muted">TVA</span>
+                    <field name="jsocr_conf_amount_tax_badge" widget="badge" nolabel="1"
+                           invisible="not jsocr_conf_amount_tax_badge"
+                           decoration-success="jsocr_conf_amount_tax &gt;= 95"
+                           decoration-warning="jsocr_conf_amount_tax &gt;= 90 and jsocr_conf_amount_tax &lt; 95"
+                           decoration-danger="jsocr_conf_amount_tax &lt; 90"/>
+                    <span class="text-muted">TTC</span>
+                    <field name="jsocr_conf_amount_total_badge" widget="badge" nolabel="1"
+                           invisible="not jsocr_conf_amount_total_badge"
+                           decoration-success="jsocr_conf_amount_total &gt;= 95"
+                           decoration-warning="jsocr_conf_amount_total &gt;= 90 and jsocr_conf_amount_total &lt; 95"
+                           decoration-danger="jsocr_conf_amount_total &lt; 90"/>
+                </div>
+            </xpath>
+
             <!-- JSOCR Info Section - Only visible for OCR invoices -->
             <xpath expr="//page[@id='other_tab']" position="after">
 
@@ -108,6 +133,9 @@
                 <field name="jsocr_conf_supplier" invisible="1"/>
                 <field name="jsocr_conf_date" invisible="1"/>
                 <field name="jsocr_conf_invoice_number" invisible="1"/>
+                <field name="jsocr_conf_amount_untaxed" invisible="1"/>
+                <field name="jsocr_conf_amount_tax" invisible="1"/>
+                <field name="jsocr_conf_amount_total" invisible="1"/>
             </xpath>
 
         </field>

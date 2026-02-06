@@ -91,6 +91,15 @@ class AccountMove(models.Model):
     jsocr_conf_invoice_number_badge = fields.Char(
         compute='_compute_jsocr_conf_badges', string='N° facture',
     )
+    jsocr_conf_amount_untaxed_badge = fields.Char(
+        compute='_compute_jsocr_conf_badges', string='Montant HT',
+    )
+    jsocr_conf_amount_tax_badge = fields.Char(
+        compute='_compute_jsocr_conf_badges', string='TVA',
+    )
+    jsocr_conf_amount_total_badge = fields.Char(
+        compute='_compute_jsocr_conf_badges', string='Total TTC',
+    )
 
     # -------------------------------------------------------------------------
     # JSOCR COMPUTED FIELDS FOR UI (Story 5.2, 5.3)
@@ -162,6 +171,15 @@ class AccountMove(models.Model):
             )
             move.jsocr_conf_invoice_number_badge = (
                 f"{move.jsocr_conf_invoice_number}%" if move.jsocr_conf_invoice_number else ''
+            )
+            move.jsocr_conf_amount_untaxed_badge = (
+                f"{move.jsocr_conf_amount_untaxed}%" if move.jsocr_conf_amount_untaxed else ''
+            )
+            move.jsocr_conf_amount_tax_badge = (
+                f"{move.jsocr_conf_amount_tax}%" if move.jsocr_conf_amount_tax else ''
+            )
+            move.jsocr_conf_amount_total_badge = (
+                f"{move.jsocr_conf_amount_total}%" if move.jsocr_conf_amount_total else ''
             )
 
     # -------------------------------------------------------------------------
