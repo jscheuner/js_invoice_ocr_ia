@@ -129,3 +129,35 @@ development_status:
   6-6-vue-gestion-masques: done
   6-7-generation-automatique-masque: done
   epic-6-retrospective: optional
+
+  # ============================================
+  # Epic 7: Abstraction Multi-Provider IA (5 stories)
+  # ============================================
+  epic-7: done
+  7-1-extraction-aiservicebase: done
+  7-2-refactoring-ollamaservice: done
+  7-3-aiservicefactory: done
+  7-4-champs-config-provider-ui: done
+  7-5-tests-non-regression-abstraction: done
+  epic-7-retrospective: optional
+
+  # ============================================
+  # Epic 8: Integration Claude AI (4 stories)
+  # ============================================
+  epic-8: done
+  8-1-claudeservice-sdk-anthropic: done
+  8-2-gestion-cle-api-securisee: done
+  8-3-test-connexion-claude-interface: done
+  8-4-tests-claudeservice-mocks-api: done
+  epic-8-retrospective: optional
+
+  # ============================================
+  # Epic 9: Integration OpenAI & Fallback Resilient (5 stories)
+  # ============================================
+  epic-9: backlog
+  9-1-openaiservice-sdk-openai: backlog
+  9-2-fallback-en-cascade: backlog
+  9-3-retry-intelligent-gestion-erreurs: backlog
+  9-4-plafond-couts-par-lot: backlog
+  9-5-tests-integration-multi-provider-fallback: backlog
+  epic-9-retrospective: optional
