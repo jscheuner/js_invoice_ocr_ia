@@ -16,4 +16,5 @@ from . import test_ai_service
 from . import test_ai_service_base
 from . import test_ai_service_ollama
 from . import test_ai_service_factory
+from . import test_ai_service_claude
 from . import test_ht_ttc_detection

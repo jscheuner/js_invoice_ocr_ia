@@ -5,5 +5,6 @@
 from . import ocr_service
 from . import ai_service_base
 from . import ai_service_ollama
+from . import ai_service_claude
 from . import ai_service_factory
 # from . import file_watcher

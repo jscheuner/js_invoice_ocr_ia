@@ -7,11 +7,22 @@
         <field name="arch" type="xml">
             <form string="Configuration OCR IA">
                 <sheet>
+                    <div class="alert alert-warning mb-3"
+                         role="alert"
+                         invisible="ai_provider == 'ollama'">
+                        <strong>Attention :</strong> Les donnees de factures seront envoyees
+                        a un serveur externe pour traitement IA. Assurez-vous que cela est
+                        conforme a votre politique de confidentialite.
+                    </div>
+
                     <group name="ai_provider" string="Provider IA">
                         <field name="ai_provider"/>
                         <field name="ai_base_url"
                                invisible="ai_provider == 'ollama'"/>
                         <field name="ai_model_name"
+                               invisible="ai_provider == 'ollama'"/>
+                        <field name="ai_api_key"
+                               widget="password"
                                invisible="ai_provider == 'ollama'"/>
                         <button name="test_ai_connection"
                                 type="object"
@@ -28,6 +39,15 @@
                                help="Nom du modèle IA à utiliser (ex: llama3, mistral)"/>
                         <field name="ollama_timeout"
                                help="Timeout en secondes pour les requêtes Ollama (défaut: 120s)"/>
+                    </group>
+
+                    <group name="claude" string="Informations Claude"
+                           invisible="ai_provider != 'claude'">
+                        <div colspan="2">
+                            <p>Modele par defaut : <strong>claude-sonnet-4-5-20250929</strong></p>
+                            <p>URL par defaut : <strong>https://api.anthropic.com</strong></p>
+                            <p>Laissez les champs URL et Modele vides pour utiliser les valeurs par defaut.</p>
+                        </div>
                     </group>
 
                     <group name="folders" string="Chemins des Dossiers">

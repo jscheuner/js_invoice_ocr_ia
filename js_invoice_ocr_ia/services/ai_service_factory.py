@@ -40,9 +40,20 @@ class AIServiceFactory:
             _logger.info("JSOCR: AI provider created: %s", provider)
             return service
 
+        if provider == 'claude':
+            from .ai_service_claude import ClaudeService
+            service = ClaudeService(
+                api_key=config.ai_api_key,
+                url=config.ai_base_url or None,
+                model=config.ai_model_name or None,
+                timeout=config.ollama_timeout or None,
+            )
+            _logger.info("JSOCR: AI provider created: %s", provider)
+            return service
+
         raise ValueError(
             f"Unsupported AI provider: '{provider}'. "
-            f"Supported providers: ollama. (Claude and OpenAI coming in Epics 8-9)"
+            f"Supported providers: ollama, claude."
         )
 
     @staticmethod

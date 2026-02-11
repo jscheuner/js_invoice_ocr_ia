@@ -68,6 +68,12 @@ class JsocrConfig(models.Model):
         help='Nom du modele IA a utiliser pour ce provider',
     )
 
+    ai_api_key = fields.Char(
+        string='API Key',
+        groups='base.group_system',
+        help='Cle API pour les providers cloud (Claude, OpenAI).',
+    )
+
     # Chemins des dossiers de traitement
     watch_folder_path = fields.Char(
         string='Watch Folder',
