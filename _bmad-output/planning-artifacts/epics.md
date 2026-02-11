@@ -1,13 +1,16 @@
 ---
-stepsCompleted: ['step-01-validate-prerequisites', 'step-02-design-epics', 'step-03-create-stories', 'step-04-final-validation']
+stepsCompleted: [1, 2, 3, 4]
 status: complete
 completedAt: 2026-01-29
+updatedAt: 2026-02-11
 inputDocuments:
   - prd.md
   - architecture.md
-totalEpics: 6
-totalStories: 54
+  - research/technical-integration-ia-cloud-research-2026-02-06.md
+totalEpics: 9
+totalStories: 68
 frCoverage: 46/46
+arCoverage: 12/12
 ---
 
 # js_invoice_ocr_ia - Epic Breakdown
@@ -121,51 +124,78 @@ This document provides the complete epic and story breakdown for js_invoice_ocr_
 ### Additional Requirements
 
 **From Architecture - Starter Template:**
-- Template OCA Personnalisé requis pour Epic 1 Story 1
+- Template OCA Personnalise requis pour Epic 1 Story 1
 - Structure: models/, services/, views/, security/, data/, tests/, static/
 
-**From Architecture - Technical Requirements:**
+**From Architecture - Technical Requirements (MVP):**
 - Utiliser queue_job OCA pour traitement asynchrone
-- Cron job pour scanner le dossier surveillé (toutes les 5 min)
+- Cron job pour scanner le dossier surveille (toutes les 5 min)
 - Stockage masques en JSON dans champ Text
-- Indices de confiance stockés par champ (JSON)
-- Services dédiés: OCRService, OllamaService, FileWatcher
-- Machine à états pour jobs: draft → pending → processing → done/error/failed
-- Pattern retry: 3x avec backoff (5s, 15s, 30s) pour erreurs transitoires
-- Timeout Ollama: 120 secondes
+- Indices de confiance stockes par champ (JSON)
+- Services dedies: OCRService, OllamaService, FileWatcher
+- Machine a etats pour jobs: draft → pending → processing → done/error/failed
+- Pattern retry: 3x avec backoff pour erreurs transitoires
+- Timeout IA: 120 secondes
 
-**From Architecture - Implementation Sequence:**
-1. Structure addon + modèles de base
-2. Service OCR (PyMuPDF + Tesseract)
-3. Service Ollama + prompts
-4. File watcher + queue jobs
-5. Création facture brouillon
-6. UI validation + badges confiance
-7. Apprentissage corrections
+**From Architecture - Multi-Provider Update (2026-02-11):**
+- AR1: Architecture multi-provider IA via Strategy Pattern + Factory (AIServiceBase abstraite)
+- AR2: Logique metier partagee dans AIServiceBase (prompts, parsing JSON, calcul confiance)
+- AR3: AIServiceFactory pour selection du provider base sur jsocr.config
+- AR4: Fallback en cascade configurable (provider principal → secondaire → Ollama local)
+- AR5: Gestion des cles API cloud (groups=base.group_system, HTTPS/TLS 1.2+, rotation)
+- AR6: Champ _metadata dans JSON confiance (provider, model, tokens, processing_time, cost_estimate)
+- AR7: Nouveaux champs jsocr.config (ai_provider, ai_api_key, ai_model_name, ai_fallback_provider, ai_max_cost_per_batch, ai_base_url)
+- AR8: Dependances Python optionnelles (anthropic>=0.40.0, openai>=1.50.0)
+- AR9: Retry avec backoff par provider + fallback sur erreurs permanentes (401, 403, JSON invalide)
+- AR10: Suivi des couts par requete dans _metadata
+- AR11: Structure OCA existante (template starter deja en place)
+- AR12: Tests par provider avec mocks API (test_ai_service_base, test_ai_service_ollama, test_ai_service_claude, test_ai_service_openai, test_ai_service_factory)
 
 **From Architecture - Patterns:**
-- Préfixe jsocr.* pour tous les modèles
-- snake_case pour champs, méthodes, JSON
-- Logs avec préfixe JSOCR: sans données sensibles
-- Un fichier = une responsabilité
+- Prefixe jsocr.* pour tous les modeles
+- snake_case pour champs, methodes, JSON
+- Logs avec prefixe JSOCR: sans donnees sensibles ni cles API
+- Un fichier = une responsabilite
+- Un provider = un fichier service (ai_service_{provider}.py)
+- Utiliser AIServiceFactory, jamais instancier un provider directement
 
 ### FR Coverage Map
 
 | Epic | Functional Requirements Covered |
 |------|--------------------------------|
 | Epic 1: Fondations & Installation | NFR13, NFR16, NFR19, NFR20 (infrastructure technique) |
-| Epic 2: Configuration & Connectivité | FR5, FR10, FR11, FR36, FR37, FR38, FR39, FR40, FR41, FR44 |
+| Epic 2: Configuration & Connectivite | FR5, FR10, FR11, FR36, FR37, FR38, FR39, FR40, FR41, FR44 |
 | Epic 3: Ingestion PDF & OCR | FR1, FR2, FR3, FR4, FR6, FR7, FR8, FR9 |
-| Epic 4: Analyse IA & Création Factures | FR12, FR13, FR14, FR15, FR16, FR17, FR18, FR19, FR20, FR21, FR32, FR33, FR34, FR35 |
+| Epic 4: Analyse IA & Creation Factures | FR12, FR13, FR14, FR15, FR16, FR17, FR18, FR19, FR20, FR21, FR32, FR33, FR34, FR35 |
 | Epic 5: Validation & Indicateurs | FR22, FR23, FR24, FR42, FR43, FR45, FR46 |
 | Epic 6: Apprentissage & Corrections | FR25, FR26, FR27, FR28, FR29, FR30, FR31 |
+| Epic 7: Abstraction Multi-Provider IA | AR1, AR2, AR3, AR6 (interface), AR7 (partiel), AR11 |
+| Epic 8: Integration Claude AI | AR5, AR6 (implementation), AR8, AR10, AR12 |
+| Epic 9: Integration OpenAI & Fallback Resilient | AR4, AR7 (fallback+plafond), AR8, AR9, AR12 |
 
 **NFR Coverage (transversal):**
-- Performance (NFR1-4): Intégré dans Epic 3, Epic 4
-- Sécurité (NFR5-8): Intégré dans Epic 2, Epic 5
-- Fiabilité (NFR9-12): Intégré dans Epic 3, Epic 4
-- Intégration (NFR13-16): Epic 1, Epic 4
-- Maintenabilité (NFR17-20): Epic 1
+- Performance (NFR1-4): Integre dans Epic 3, Epic 4
+- Securite (NFR5-8): Integre dans Epic 2, Epic 5, Epic 8 (cles API)
+- Fiabilite (NFR9-12): Integre dans Epic 3, Epic 4, Epic 9 (fallback)
+- Integration (NFR13-16): Epic 1, Epic 4, Epic 7-9 (NFR15 multi-provider)
+- Maintenabilite (NFR17-20): Epic 1
+
+**AR Coverage (multi-provider):**
+
+| AR | Description | Epic |
+|----|-------------|------|
+| AR1 | Strategy Pattern + Factory | Epic 7 |
+| AR2 | AIServiceBase logique partagee | Epic 7 |
+| AR3 | AIServiceFactory | Epic 7 |
+| AR4 | Fallback cascade | Epic 9 |
+| AR5 | Gestion cles API | Epic 8 |
+| AR6 | _metadata JSON confiance | Epic 7 (interface) + Epic 8 (implementation) |
+| AR7 | Champs config provider | Epic 7 (provider) + Epic 9 (fallback+plafond) |
+| AR8 | SDK Python (anthropic, openai) | Epic 8 + Epic 9 |
+| AR9 | Retry + fallback erreurs permanentes | Epic 9 |
+| AR10 | Suivi couts | Epic 8 + Epic 9 |
+| AR11 | Structure OCA existante | Epic 7 |
+| AR12 | Tests par provider (mocks) | Epic 8 + Epic 9 |
 
 ## Epic List
 
@@ -265,6 +295,57 @@ This document provides the complete epic and story breakdown for js_invoice_ocr_
 - Gestion des masques existants
 
 **Depends on:** Epic 5
+
+---
+
+### Epic 7: Abstraction Multi-Provider IA
+**Goal:** Permettre a l'administrateur de choisir son provider IA dans la configuration. Le systeme fonctionne exactement comme avant avec Ollama (zero regression).
+
+**ARs:** AR1, AR2, AR3, AR6 (interface), AR7 (partiel), AR11
+
+**Delivers:**
+- AIServiceBase extraite depuis OllamaService (logique metier partagee)
+- OllamaService refactore dans ai_service_ollama.py
+- AIServiceFactory pour instancier le bon service
+- Champs config (ai_provider, ai_base_url, ai_model_name)
+- _metadata dans le contrat AIServiceBase (provider="ollama", cost=0)
+- UI config avec selection provider
+- Tests de non-regression
+
+**Depends on:** Epic 4
+
+---
+
+### Epic 8: Integration Claude AI
+**Goal:** Permettre a l'administrateur d'utiliser Claude AI pour une precision d'extraction superieure (97%, JSON valide 100%) sur les factures complexes.
+
+**ARs:** AR5, AR6 (implementation), AR8, AR10, AR12
+
+**Delivers:**
+- ClaudeService (SDK Anthropic)
+- Gestion cle API securisee (admin-only, HTTPS)
+- Test connexion Claude depuis l'interface
+- _metadata rempli avec tokens/cout reels
+- Tests avec mocks API
+
+**Depends on:** Epic 7
+
+---
+
+### Epic 9: Integration OpenAI & Fallback Resilient
+**Goal:** Garantir la resilience du systeme avec un fallback automatique en cascade et permettre a l'admin de definir un plafond de couts.
+
+**ARs:** AR4, AR7 (fallback+plafond), AR8, AR9, AR12
+
+**Delivers:**
+- OpenAIService (SDK OpenAI)
+- Fallback cascade (principal → secondaire → Ollama)
+- Retry intelligent + fallback sur erreurs permanentes (401, 403)
+- Config fallback_provider + max_cost_per_batch
+- Verification cout avant traitement + alerte depassement
+- Tests d'integration multi-provider + fallback
+
+**Depends on:** Epic 8
 
 ---
 
@@ -1215,6 +1296,336 @@ So that **l'apprentissage soit automatisé**.
 
 ---
 
+## Epic 7: Abstraction Multi-Provider IA
+
+**Goal:** Permettre a l'administrateur de choisir son provider IA dans la configuration. Le systeme fonctionne exactement comme avant avec Ollama (zero regression).
+
+**ARs:** AR1, AR2, AR3, AR6 (interface), AR7 (partiel), AR11
+
+### Story 7.1: Extraction AIServiceBase depuis OllamaService
+
+As a **developpeur**,
+I want **une classe abstraite AIServiceBase extraite depuis le code existant d'OllamaService**,
+So that **la logique metier partagee (prompts, parsing JSON, calcul confiance) soit centralisee et reutilisable par tous les providers**.
+
+**Acceptance Criteria:**
+
+**Given** le code actuel de `ai_service.py` (OllamaService)
+**When** j'extrais la classe abstraite
+**Then** `ai_service_base.py` contient la classe AIServiceBase avec :
+  - `extract_invoice_data(text, images=None)` — methode publique (template method)
+  - `_call_api(text, images=None)` — abstraite, a implementer par chaque provider
+  - `test_connection()` — abstraite
+  - `_parse_response(raw)` — logique partagee de parsing JSON
+  - `_build_prompt(text)` — construction du prompt partagee
+  - `_calculate_confidence(data)` — calcul des indices de confiance
+  - `_build_metadata(tokens, processing_time)` — retourne un dict _metadata avec provider, model, tokens, processing_time, cost_estimate (interface, valeurs par defaut)
+**And** la methode `find_supplier(env, supplier_name)` reste dans la base (logique Odoo partagee)
+**And** aucune reference directe a Ollama, Claude ou OpenAI dans AIServiceBase
+
+---
+
+### Story 7.2: Refactoring OllamaService vers ai_service_ollama.py
+
+As a **developpeur**,
+I want **refactorer OllamaService pour qu'il herite d'AIServiceBase dans un fichier dedie**,
+So that **le service Ollama existant fonctionne identiquement via la nouvelle abstraction (zero regression)**.
+
+**Acceptance Criteria:**
+
+**Given** AIServiceBase creee (Story 7.1)
+**When** je refactore OllamaService
+**Then** `ai_service_ollama.py` contient OllamaService(AIServiceBase) avec :
+  - `_call_api(text, images=None)` — appel HTTP a `{ollama_url}/api/generate`
+  - `test_connection()` — GET `{ollama_url}/api/tags`
+  - `_build_metadata()` — override avec cost_estimate=0 (local)
+**And** l'ancien `ai_service.py` est supprime et tous les imports dans le codebase sont mis a jour vers `ai_service_ollama` et `ai_service_base`
+**And** tous les imports existants continuent de fonctionner apres migration
+**And** le comportement est identique a avant : memes prompts, meme parsing, memes resultats
+
+---
+
+### Story 7.3: AIServiceFactory
+
+As a **developpeur**,
+I want **une factory pour instancier le bon service IA base sur la configuration**,
+So that **le reste du code n'ait jamais a instancier un provider directement** (AR3).
+
+**Acceptance Criteria:**
+
+**Given** AIServiceBase et OllamaService existants
+**When** j'implemente AIServiceFactory
+**Then** `ai_service_factory.py` contient :
+  - `create(config) -> AIServiceBase` — instancie le provider selon `config.ai_provider`
+  - `create_with_fallback(config) -> AIServiceBase` — cree le provider avec fallback (prepare pour Epic 9)
+  - Le mapping providers est extensible : `{'ollama': OllamaService}`
+**And** `jsocr_import_job.py` utilise `AIServiceFactory.create(config)` au lieu d'instancier OllamaService directement
+**And** si `ai_provider` non configure ou invalide, OllamaService est retourne par defaut
+**And** un log JSOCR: indique le provider instancie
+
+---
+
+### Story 7.4: Champs Configuration Provider et UI
+
+As a **administrateur**,
+I want **selectionner le provider IA et configurer son URL/modele depuis l'interface**,
+So that **je puisse choisir entre Ollama, Claude ou OpenAI** (AR7 partiel).
+
+**Acceptance Criteria:**
+
+**Given** le modele jsocr.config existant
+**When** j'ajoute les nouveaux champs
+**Then** jsocr.config contient :
+  - `ai_provider` (Selection: ollama/claude/openai, defaut='ollama')
+  - `ai_base_url` (Char, label="URL du serveur IA")
+  - `ai_model_name` (Char, label="Modele IA")
+**And** la vue configuration affiche ces champs dans un groupe "Provider IA"
+**And** `ai_base_url` est pre-rempli selon le provider selectionne (ollama: http://localhost:11434)
+**And** le champ provider affiche une aide contextuelle pour chaque option
+**And** les champs Claude/OpenAI specifiques (api_key) sont invisibles pour le moment (Epic 8)
+
+---
+
+### Story 7.5: Tests Non-Regression Abstraction
+
+As a **developpeur**,
+I want **une suite de tests validant que le refactoring n'a rien casse**,
+So that **le comportement existant est garanti identique apres l'abstraction**.
+
+**Acceptance Criteria:**
+
+**Given** l'abstraction AIServiceBase + OllamaService refactore + Factory
+**When** je lance les tests
+**Then** `test_ai_service_base.py` verifie :
+  - AIServiceBase ne peut pas etre instanciee directement (ABC)
+  - `_parse_response()` parse correctement le JSON
+  - `_build_prompt()` genere un prompt valide
+  - `_calculate_confidence()` retourne des scores coherents
+  - `_build_metadata()` retourne le dict avec les cles attendues
+**And** `test_ai_service_ollama.py` verifie :
+  - OllamaService instanciable et herite d'AIServiceBase
+  - `_call_api()` envoie la bonne requete HTTP (mock)
+  - `test_connection()` verifie la reponse Ollama (mock)
+  - _metadata contient cost_estimate=0
+**And** `test_ai_service_factory.py` verifie :
+  - `create(config)` retourne OllamaService quand ai_provider='ollama'
+  - `create(config)` retourne OllamaService par defaut si provider inconnu
+  - `create(config)` log le provider instancie
+**And** les tests existants de `test_ai_service.py` passent toujours
+**And** tags: `@tagged('post_install', '-at_install', 'jsocr', 'jsocr_ai')`
+
+---
+
+## Epic 8: Integration Claude AI
+
+**Goal:** Permettre a l'administrateur d'utiliser Claude AI pour une precision d'extraction superieure (97%, JSON valide 100%) sur les factures complexes.
+
+**ARs:** AR5, AR6 (implementation), AR8, AR10, AR12
+
+### Story 8.1: ClaudeService (SDK Anthropic)
+
+As a **developpeur**,
+I want **un service ClaudeService qui implemente AIServiceBase via le SDK Anthropic**,
+So that **les factures puissent etre analysees par Claude AI** (AR8).
+
+**Acceptance Criteria:**
+
+**Given** AIServiceBase et AIServiceFactory existants (Epic 7)
+**When** j'implemente ClaudeService
+**Then** `ai_service_claude.py` contient ClaudeService(AIServiceBase) avec :
+  - `_call_api(text, images=None)` — appel via `anthropic.Anthropic().messages.create()`
+  - Modele par defaut : `claude-sonnet-4-5-20250929`
+  - Support des images (base64) pour PDFs scannes via content blocks
+  - `test_connection()` — envoie un message simple et verifie la reponse
+  - `_build_metadata()` — remplit tokens (input_tokens + output_tokens), processing_time, cost_estimate (calcule selon pricing)
+**And** la dependance `anthropic>=0.40.0` est dans `requirements.txt` (optionnelle)
+**And** AIServiceFactory.create() supporte `ai_provider='claude'`
+**And** les erreurs API (AuthenticationError, RateLimitError, APIError) sont capturees avec des messages clairs
+
+---
+
+### Story 8.2: Gestion Cle API Securisee
+
+As a **administrateur**,
+I want **configurer et stocker la cle API Claude de maniere securisee**,
+So that **seuls les administrateurs y aient acces et que la communication soit chiffree** (AR5).
+
+**Acceptance Criteria:**
+
+**Given** jsocr.config avec les champs provider (Story 7.4)
+**When** j'ajoute la gestion des cles API
+**Then** jsocr.config contient :
+  - `ai_api_key` (Char, groups="base.group_system", label="Cle API")
+**And** le champ est visible uniquement quand ai_provider != 'ollama'
+**And** le champ utilise `widget="password"` dans la vue
+**And** la cle n'est JAMAIS loguee (log JSOCR: masque la cle)
+**And** ClaudeService verifie que HTTPS est utilise pour les appels API
+**And** une erreur claire est levee si la cle est manquante ou invalide (401)
+**And** quand ai_provider != 'ollama', un bandeau d'avertissement s'affiche dans la vue config : "Attention : les donnees de facture seront envoyees a un serveur externe ({provider}). Assurez-vous que cela est conforme a votre politique de confidentialite." (NFR5)
+
+---
+
+### Story 8.3: Test Connexion Claude depuis l'Interface
+
+As a **administrateur**,
+I want **tester la connexion Claude depuis la page de configuration**,
+So that **je puisse verifier que ma cle API est valide et que Claude repond**.
+
+**Acceptance Criteria:**
+
+**Given** ai_provider='claude' et ai_api_key renseignee
+**When** je clique sur le bouton "Tester la connexion"
+**Then** le systeme envoie un message test via ClaudeService.test_connection()
+**And** si succes : message "Connexion Claude OK — Modele: {model_name}, Tokens utilises: X"
+**And** si cle invalide : message "Erreur: Cle API invalide (401 Unauthorized)"
+**And** si timeout : message "Erreur: Timeout apres 10 secondes"
+**And** le bouton test est le meme que pour Ollama (logique adaptee via Factory)
+
+---
+
+### Story 8.4: Tests ClaudeService avec Mocks API
+
+As a **developpeur**,
+I want **des tests complets pour ClaudeService avec des mocks de l'API Anthropic**,
+So that **le service soit valide sans appels reels a l'API** (AR12).
+
+**Acceptance Criteria:**
+
+**Given** ClaudeService implementee
+**When** je lance les tests
+**Then** `test_ai_service_claude.py` verifie :
+  - ClaudeService instanciable et herite d'AIServiceBase
+  - `_call_api()` envoie le bon format de requete (mock SDK)
+  - Le parsing JSON fonctionne avec les reponses Claude
+  - `test_connection()` retourne True sur reponse valide (mock)
+  - `test_connection()` retourne False sur erreur (mock)
+  - Les erreurs AuthenticationError, RateLimitError sont gerees
+  - `_build_metadata()` calcule correctement tokens et cost_estimate
+  - La cle API est lue depuis config et jamais loguee
+**And** les mocks utilisent `unittest.mock.patch` sur le SDK anthropic
+**And** tags: `@tagged('post_install', '-at_install', 'jsocr', 'jsocr_claude')`
+
+---
+
+## Epic 9: Integration OpenAI & Fallback Resilient
+
+**Goal:** Garantir la resilience du systeme avec un fallback automatique en cascade et permettre a l'admin de definir un plafond de couts.
+
+**ARs:** AR4, AR7 (fallback+plafond), AR8, AR9, AR12
+
+### Story 9.1: OpenAIService (SDK OpenAI)
+
+As a **developpeur**,
+I want **un service OpenAIService qui implemente AIServiceBase via le SDK OpenAI**,
+So that **les factures puissent etre analysees par GPT-4o** (AR8).
+
+**Acceptance Criteria:**
+
+**Given** AIServiceBase et AIServiceFactory existants
+**When** j'implemente OpenAIService
+**Then** `ai_service_openai.py` contient OpenAIService(AIServiceBase) avec :
+  - `_call_api(text, images=None)` — appel via `openai.OpenAI().chat.completions.create()`
+  - Modele par defaut : `gpt-4o`
+  - Support des images (base64 URL) pour PDFs scannes
+  - `test_connection()` — envoie un message simple et verifie la reponse
+  - `_build_metadata()` — remplit tokens (prompt_tokens + completion_tokens), cost_estimate
+**And** la dependance `openai>=1.50.0` est dans `requirements.txt` (optionnelle)
+**And** AIServiceFactory.create() supporte `ai_provider='openai'`
+**And** les erreurs API (AuthenticationError, RateLimitError, APIError) sont capturees
+
+---
+
+### Story 9.2: Fallback en Cascade
+
+As a **systeme**,
+I want **un mecanisme de fallback automatique entre providers IA**,
+So that **si le provider principal echoue, le traitement continue avec le secondaire puis Ollama** (AR4).
+
+**Acceptance Criteria:**
+
+**Given** jsocr.config avec ai_provider et ai_fallback_provider
+**When** le provider principal echoue (erreur permanente: 401, 403, JSON invalide)
+**Then** le systeme tente automatiquement le fallback_provider
+**And** si le fallback echoue aussi, Ollama local est utilise en dernier recours
+**And** la cascade est : principal → secondaire → Ollama (toujours disponible)
+**And** jsocr.config contient `ai_fallback_provider` (Selection: ollama/claude/openai/none)
+**And** `AIServiceFactory.create_with_fallback(config)` retourne un wrapper qui gere la cascade
+**And** le log JSOCR: indique chaque bascule : "Fallback de {provider1} vers {provider2}: {raison}"
+**And** le _metadata final indique le provider effectivement utilise
+
+---
+
+### Story 9.3: Retry Intelligent et Gestion Erreurs par Provider
+
+As a **systeme**,
+I want **un mecanisme de retry avec backoff adapte a chaque type d'erreur**,
+So that **les erreurs transitoires soient recuperees sans declencher un fallback inutile** (AR9).
+
+**Acceptance Criteria:**
+
+**Given** un appel API qui echoue
+**When** l'erreur est transitoire (timeout, 429 rate limit, 500/502/503)
+**Then** le systeme retente 3 fois avec backoff exponentiel (1s, 2s, 4s)
+**And** apres 3 echecs, le fallback est declenche
+
+**Given** un appel API qui echoue
+**When** l'erreur est permanente (401 Unauthorized, 403 Forbidden, JSON invalide)
+**Then** le fallback est declenche immediatement (pas de retry)
+**And** un log JSOCR: WARNING indique l'erreur permanente
+
+**And** la logique de retry est dans AIServiceBase (partagee par tous les providers)
+**And** chaque provider definit ses codes d'erreur transitoires vs permanentes
+**And** le nombre de retries et les delais sont dans les constantes de AIServiceBase
+
+---
+
+### Story 9.4: Plafond de Couts par Lot
+
+As a **administrateur**,
+I want **definir un plafond de cout maximum par lot de traitement**,
+So that **je controle mes depenses cloud IA** (AR7, AR10).
+
+**Acceptance Criteria:**
+
+**Given** jsocr.config avec ai_max_cost_per_batch
+**When** un lot de factures est traite
+**Then** le systeme calcule le cout estime cumule via _metadata.cost_estimate
+**And** si le cout cumule depasse ai_max_cost_per_batch, les jobs restants basculent vers Ollama
+**And** un log JSOCR: WARNING indique : "Plafond cout atteint ({cumul}/{max}), bascule vers Ollama"
+**And** jsocr.config contient `ai_max_cost_per_batch` (Float, defaut=0 = illimite)
+**And** la verification du plafond se fait dans AIServiceFactory.create_with_fallback()
+**And** le cout est estime avant traitement selon le provider et la taille du texte
+
+---
+
+### Story 9.5: Tests Integration Multi-Provider et Fallback
+
+As a **developpeur**,
+I want **des tests complets validant le fallback en cascade, le retry et le plafond de couts**,
+So that **la resilience du systeme soit garantie** (AR12).
+
+**Acceptance Criteria:**
+
+**Given** tous les services implementes (Ollama, Claude, OpenAI, Factory, Fallback)
+**When** je lance les tests
+**Then** `test_ai_service_openai.py` verifie :
+  - OpenAIService instanciable et herite d'AIServiceBase
+  - `_call_api()` envoie le bon format (mock SDK)
+  - `test_connection()` fonctionne (mock)
+  - _metadata calcule correctement tokens et cost_estimate
+**And** `test_ai_service_factory.py` (etendu) verifie :
+  - `create(config)` retourne le bon provider pour chaque valeur de ai_provider
+  - `create_with_fallback(config)` retourne un wrapper fonctionnel
+  - Le fallback se declenche sur erreur permanente du provider principal
+  - Le fallback cascade correctement : principal → secondaire → Ollama
+  - Le retry se declenche sur erreur transitoire (3 tentatives)
+  - Le retry ne se declenche PAS sur erreur permanente
+  - Le plafond de cout bascule vers Ollama quand depasse
+  - Le _metadata final indique le provider effectivement utilise
+**And** tags: `@tagged('post_install', '-at_install', 'jsocr', 'jsocr_fallback')`
+
+---
+
 ## Récapitulatif Global
 
 | Epic | Stories | FRs Couverts |
@@ -1225,5 +1636,8 @@ So that **l'apprentissage soit automatisé**.
 | Epic 4: Analyse IA & Création Factures | 20 | FR12-21, FR32-35, FR26-27 (prédiction compte) |
 | Epic 5: Validation & Indicateurs | 7 | FR22-24, FR42-43, FR45-46 |
 | Epic 6: Apprentissage & Corrections | 7 | FR25-31 |
-| **Total** | **54 stories** | **46 FRs couverts** |
+| Epic 7: Abstraction Multi-Provider IA | 5 | AR1-3, AR6, AR7, AR11 |
+| Epic 8: Integration Claude AI | 4 | AR5, AR6, AR8, AR10, AR12 |
+| Epic 9: Integration OpenAI & Fallback Resilient | 5 | AR4, AR7-9, AR12 |
+| **Total** | **68 stories** | **46 FRs + 12 ARs couverts** |
 
