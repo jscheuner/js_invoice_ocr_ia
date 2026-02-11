@@ -743,17 +743,13 @@ class JsocrImportJob(models.Model):
         # Get config
         config = self.env['jsocr.config'].get_config()
 
-        # Initialize Ollama service
-        from odoo.addons.js_invoice_ocr_ia.services.ai_service import OllamaService
+        # Initialize AI service via factory
+        from odoo.addons.js_invoice_ocr_ia.services.ai_service_factory import AIServiceFactory
 
-        ollama = OllamaService(
-            url=config.ollama_url,
-            model=config.ollama_model,
-            timeout=config.ollama_timeout,
-        )
+        ai_service = AIServiceFactory.create(config)
 
         # Extract data
-        result = ollama.extract_invoice_data(
+        result = ai_service.extract_invoice_data(
             self.extracted_text,
             language=self.detected_language or 'fr'
         )
@@ -770,17 +766,17 @@ class JsocrImportJob(models.Model):
         self.confidence_data = json.dumps(confidence_data) if confidence_data else ''
 
         # Extract and store individual fields (Story 4.3-4.6)
-        self._store_extracted_data(data, ollama)
+        self._store_extracted_data(data, ai_service)
 
         _logger.info("JSOCR: Job %s AI analysis complete", self.id)
         return result
 
-    def _store_extracted_data(self, data, ollama_service):
+    def _store_extracted_data(self, data, ai_service):
         """Store extracted data in job fields.
 
         Args:
             data (dict): Extracted data from AI
-            ollama_service: OllamaService instance for parsing
+            ai_service: AIServiceBase instance for parsing
         """
         self.ensure_one()
 
@@ -791,7 +787,7 @@ class JsocrImportJob(models.Model):
         # Find matching Odoo partner and boost supplier confidence
         match_type = None
         if supplier_name:
-            partner, match_type = ollama_service.find_supplier(self.env, supplier_name)
+            partner, match_type = ai_service.find_supplier(self.env, supplier_name)
             if partner:
                 self.partner_id = partner.id
 
@@ -800,7 +796,7 @@ class JsocrImportJob(models.Model):
 
         # Date (Story 4.4)
         date_str = data.get('invoice_date')
-        parsed_date = ollama_service.parse_invoice_date(date_str)
+        parsed_date = ai_service.parse_invoice_date(date_str)
         if parsed_date:
             self.extracted_invoice_date = parsed_date
 
@@ -808,13 +804,13 @@ class JsocrImportJob(models.Model):
         self.extracted_invoice_number = data.get('invoice_number')
 
         # Lines (Story 4.5)
-        lines = ollama_service.parse_invoice_lines(data.get('lines', []))
+        lines = ai_service.parse_invoice_lines(data.get('lines', []))
         self.extracted_lines = json.dumps(lines) if lines else ''
 
         # Amounts (Story 4.6)
-        self.extracted_amount_untaxed = ollama_service._parse_amount(data.get('amount_untaxed')) or 0.0
-        self.extracted_amount_tax = ollama_service._parse_amount(data.get('amount_tax')) or 0.0
-        self.extracted_amount_total = ollama_service._parse_amount(data.get('amount_total')) or 0.0
+        self.extracted_amount_untaxed = ai_service._parse_amount(data.get('amount_untaxed')) or 0.0
+        self.extracted_amount_tax = ai_service._parse_amount(data.get('amount_tax')) or 0.0
+        self.extracted_amount_total = ai_service._parse_amount(data.get('amount_total')) or 0.0
 
     def _boost_supplier_confidence(self, supplier_name, match_type):
         """Recalculate supplier confidence based on Odoo partner resolution.

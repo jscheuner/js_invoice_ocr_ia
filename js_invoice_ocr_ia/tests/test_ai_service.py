@@ -27,7 +27,7 @@ class TestOllamaService(TransactionCase):
     def setUpClass(cls):
         super().setUpClass()
         # Import the service
-        from odoo.addons.js_invoice_ocr_ia.services.ai_service import OllamaService
+        from odoo.addons.js_invoice_ocr_ia.services.ai_service_ollama import OllamaService
         cls.OllamaService = OllamaService
 
     def test_service_initialization(self):
@@ -54,7 +54,7 @@ class TestOllamaService(TransactionCase):
     # Story 4.1: Connection Tests
     # -------------------------------------------------------------------------
 
-    @patch('odoo.addons.js_invoice_ocr_ia.services.ai_service.requests.get')
+    @patch('odoo.addons.js_invoice_ocr_ia.services.ai_service_ollama.requests.get')
     def test_connection_success(self, mock_get):
         """Test successful connection to Ollama."""
         mock_get.return_value.status_code = 200
@@ -72,7 +72,7 @@ class TestOllamaService(TransactionCase):
         self.assertIn('2 model(s)', message)
         self.assertEqual(models, ['llama3', 'mistral'])
 
-    @patch('odoo.addons.js_invoice_ocr_ia.services.ai_service.requests.get')
+    @patch('odoo.addons.js_invoice_ocr_ia.services.ai_service_ollama.requests.get')
     def test_connection_timeout(self, mock_get):
         """Test connection timeout handling."""
         import requests
@@ -84,7 +84,7 @@ class TestOllamaService(TransactionCase):
         self.assertFalse(success)
         self.assertIn('timeout', message.lower())
 
-    @patch('odoo.addons.js_invoice_ocr_ia.services.ai_service.requests.get')
+    @patch('odoo.addons.js_invoice_ocr_ia.services.ai_service_ollama.requests.get')
     def test_connection_error(self, mock_get):
         """Test connection error handling."""
         import requests
@@ -406,7 +406,7 @@ class TestOllamaService(TransactionCase):
     # Story 4.1-4.7: Full Extraction Tests
     # -------------------------------------------------------------------------
 
-    @patch('odoo.addons.js_invoice_ocr_ia.services.ai_service.requests.post')
+    @patch('odoo.addons.js_invoice_ocr_ia.services.ai_service_ollama.requests.post')
     def test_extract_invoice_data_success(self, mock_post):
         """Test successful invoice data extraction."""
         mock_response = {
@@ -434,7 +434,7 @@ class TestOllamaService(TransactionCase):
         self.assertIsNotNone(result['confidence_data'])
         self.assertIsNone(result['error'])
 
-    @patch('odoo.addons.js_invoice_ocr_ia.services.ai_service.requests.post')
+    @patch('odoo.addons.js_invoice_ocr_ia.services.ai_service_ollama.requests.post')
     def test_extract_invoice_data_timeout(self, mock_post):
         """Test timeout handling during extraction."""
         import requests
@@ -447,7 +447,7 @@ class TestOllamaService(TransactionCase):
         self.assertEqual(result['error_type'], 'timeout')
         self.assertIn('timeout', result['error'].lower())
 
-    @patch('odoo.addons.js_invoice_ocr_ia.services.ai_service.requests.post')
+    @patch('odoo.addons.js_invoice_ocr_ia.services.ai_service_ollama.requests.post')
     def test_extract_invoice_data_connection_error(self, mock_post):
         """Test connection error handling during extraction."""
         import requests
@@ -467,7 +467,7 @@ class TestOllamaService(TransactionCase):
         self.assertFalse(result['success'])
         self.assertEqual(result['error_type'], 'validation_error')
 
-    @patch('odoo.addons.js_invoice_ocr_ia.services.ai_service.requests.post')
+    @patch('odoo.addons.js_invoice_ocr_ia.services.ai_service_ollama.requests.post')
     def test_extract_invoice_data_parse_error(self, mock_post):
         """Test parse error handling when AI returns invalid JSON."""
         mock_post.return_value.status_code = 200
@@ -489,7 +489,7 @@ class TestSupplierMatching(TransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        from odoo.addons.js_invoice_ocr_ia.services.ai_service import OllamaService
+        from odoo.addons.js_invoice_ocr_ia.services.ai_service_ollama import OllamaService
         cls.OllamaService = OllamaService
 
         # Create test partners

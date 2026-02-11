@@ -7,18 +7,27 @@
         <field name="arch" type="xml">
             <form string="Configuration OCR IA">
                 <sheet>
-                    <group name="ollama" string="Configuration Ollama">
+                    <group name="ai_provider" string="Provider IA">
+                        <field name="ai_provider"/>
+                        <field name="ai_base_url"
+                               invisible="ai_provider == 'ollama'"/>
+                        <field name="ai_model_name"
+                               invisible="ai_provider == 'ollama'"/>
+                        <button name="test_ai_connection"
+                                type="object"
+                                string="Tester la connexion IA"
+                                class="btn-secondary"
+                                help="Teste la connexion au provider IA configuré"/>
+                    </group>
+
+                    <group name="ollama" string="Configuration Ollama"
+                           invisible="ai_provider != 'ollama'">
                         <field name="ollama_url" widget="url"
                                help="URL du serveur Ollama (ex: http://localhost:11434)"/>
                         <field name="ollama_model"
                                help="Nom du modèle IA à utiliser (ex: llama3, mistral)"/>
                         <field name="ollama_timeout"
                                help="Timeout en secondes pour les requêtes Ollama (défaut: 120s)"/>
-                        <button name="test_ollama_connection"
-                                type="object"
-                                string="Tester la connexion"
-                                class="btn-secondary"
-                                help="Teste la connexion au serveur Ollama et récupère les modèles disponibles"/>
                     </group>
 
                     <group name="folders" string="Chemins des Dossiers">

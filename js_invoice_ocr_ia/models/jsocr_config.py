@@ -50,6 +50,24 @@ class JsocrConfig(models.Model):
         help='Timeout en secondes pour les requetes Ollama (default: 120s)'
     )
 
+    # AI Provider selection (Epic 7)
+    ai_provider = fields.Selection(
+        [('ollama', 'Ollama (Local)'), ('claude', 'Claude (Anthropic)'), ('openai', 'OpenAI')],
+        string='AI Provider',
+        default='ollama',
+        required=True,
+    )
+
+    ai_base_url = fields.Char(
+        string='API Base URL',
+        help='URL de base pour le provider IA (si different du defaut)',
+    )
+
+    ai_model_name = fields.Char(
+        string='Model Name',
+        help='Nom du modele IA a utiliser pour ce provider',
+    )
+
     # Chemins des dossiers de traitement
     watch_folder_path = fields.Char(
         string='Watch Folder',
@@ -257,83 +275,55 @@ class JsocrConfig(models.Model):
         return []
 
     # Button action method - no decorator needed, called via type="object" in view
-    def test_ollama_connection(self):
-        """Test Ollama server connection and retrieve available models.
+    def test_ai_connection(self):
+        """Test AI provider connection and retrieve available models.
 
-        Sends GET request to {ollama_url}/api/tags to verify connectivity
-        and list available models. Results displayed via Odoo notification.
-
-        Note: Uses 10s timeout (hardcoded) for connection test, while ollama_timeout
-        field (120s default) is used for actual AI processing requests.
-
-        Example:
-            config = self.env['jsocr.config'].get_config()
-            result = config.test_ollama_connection()
-            # Returns notification dict or raises UserError
+        Uses AIServiceFactory to create the configured provider, then calls
+        test_connection(). Results displayed via Odoo notification.
 
         Returns:
             dict: Client action for Odoo notification
 
         Raises:
-            UserError: If connection fails or URL not configured
+            UserError: If connection fails
         """
-        self.ensure_one()  # Singleton pattern
+        self.ensure_one()
 
-        if not self.ollama_url:
-            raise UserError("L'URL Ollama n'est pas configuree")
-
-        _logger.info("JSOCR: Testing Ollama connection")
+        _logger.info("JSOCR: Testing AI connection (provider=%s)", self.ai_provider)
 
         try:
-            response = requests.get(
-                f"{self.ollama_url}/api/tags",
-                timeout=10
-            )
+            from odoo.addons.js_invoice_ocr_ia.services.ai_service_factory import AIServiceFactory
+            service = AIServiceFactory.create(self)
+        except ValueError as e:
+            raise UserError(str(e))
 
-            if response.status_code == 200:
-                data = response.json()
-                models = [m['name'] for m in data.get('models', [])]
+        success, message, models = service.test_connection()
 
-                if models:
-                    message = f"Connexion OK - Modeles disponibles: {', '.join(models)}"
-                else:
-                    message = "Connexion OK - Aucun modele disponible"
-
-                _logger.info(f"JSOCR: Ollama connection successful - {len(models)} model(s) found")
-
-                return {
-                    'type': 'ir.actions.client',
-                    'tag': 'display_notification',
-                    'params': {
-                        'title': 'Succes',
-                        'message': message,
-                        'type': 'success',
-                        'sticky': False,
-                    }
-                }
+        if success:
+            if models:
+                display_msg = f"Connexion OK - Modeles disponibles: {', '.join(models)}"
             else:
-                error_msg = f"Erreur de connexion: HTTP {response.status_code}"
-                _logger.warning(f"JSOCR: Ollama connection failed - HTTP {response.status_code}")
-                raise UserError(error_msg)
+                display_msg = f"Connexion OK - {message}"
 
-        except requests.Timeout:
-            error_msg = "Erreur de connexion: Timeout apres 10s"
-            _logger.warning("JSOCR: Ollama connection timeout")
+            _logger.info("JSOCR: AI connection successful (%s)", self.ai_provider)
+
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Succes',
+                    'message': display_msg,
+                    'type': 'success',
+                    'sticky': False,
+                }
+            }
+        else:
+            error_msg = f"Erreur de connexion: {message}"
+            _logger.warning("JSOCR: AI connection failed: %s", message)
             raise UserError(error_msg)
 
-        except requests.ConnectionError:
-            error_msg = "Erreur de connexion au serveur Ollama"
-            _logger.error("JSOCR: Ollama connection error")
-            raise UserError(error_msg)
-
-        except ValueError:
-            error_msg = "Erreur: Reponse JSON invalide du serveur Ollama"
-            _logger.error("JSOCR: Invalid JSON response from Ollama")
-            raise UserError(error_msg)
-        except KeyError:
-            error_msg = "Erreur: Structure de reponse invalide du serveur Ollama"
-            _logger.error("JSOCR: Invalid response structure from Ollama")
-            raise UserError(error_msg)
+    # Backward compatibility alias
+    test_ollama_connection = test_ai_connection
 
     # -------------------------------------------------------------------------
     # FOLDER SCANNING (Story 3.4)
