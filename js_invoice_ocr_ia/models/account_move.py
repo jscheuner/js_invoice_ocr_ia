@@ -52,6 +52,13 @@ class AccountMove(models.Model):
              'or if HT/TTC detection was inconclusive',
     )
 
+    jsocr_ttc_adjustment = fields.Float(
+        string='Ajustement arrondi TTC',
+        digits=(6, 2),
+        default=0.0,
+        readonly=True,
+    )
+
     jsocr_global_confidence = fields.Integer(
         string='Global Confidence',
         compute='_compute_jsocr_global_confidence',

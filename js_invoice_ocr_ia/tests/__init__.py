@@ -18,3 +18,4 @@ from . import test_ai_service_ollama
 from . import test_ai_service_factory
 from . import test_ai_service_claude
 from . import test_ht_ttc_detection
+from . import test_ttc_rounding_adjustment

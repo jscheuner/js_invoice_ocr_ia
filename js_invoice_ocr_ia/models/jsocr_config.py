@@ -115,6 +115,19 @@ class JsocrConfig(models.Model):
         help='Email pour notifications d\'erreur (optionnel)'
     )
 
+    # Ajustement arrondi TTC
+    adjust_ttc_rounding = fields.Boolean(
+        string='Ajuster arrondi TTC',
+        default=False,
+        help="Ajuste automatiquement la ligne de TVA pour que le TTC corresponde au TTC extrait par OCR.",
+    )
+    adjust_ttc_max_diff = fields.Float(
+        string='Ecart max ajustement TTC',
+        default=0.05,
+        digits=(6, 2),
+        help="Ecart maximal en CHF pour l'ajustement automatique (defaut: 0.05 CHF).",
+    )
+
     # Contrainte singleton: un seul enregistrement possible via champ constant
     _sql_constraints = [
         ('unique_singleton', 'unique(singleton_marker)', 'Only one configuration record is allowed!')
@@ -143,6 +156,15 @@ class JsocrConfig(models.Model):
             if record.alert_amount_threshold is not None and record.alert_amount_threshold <= 0:
                 raise ValidationError(
                     "Le seuil d'alerte doit etre un montant positif (> 0)."
+                )
+
+    @api.constrains('adjust_ttc_max_diff')
+    def _check_adjust_ttc_max_diff(self):
+        """Validate that adjust_ttc_max_diff is between 0 and 1.0"""
+        for record in self:
+            if record.adjust_ttc_max_diff < 0 or record.adjust_ttc_max_diff > 1.0:
+                raise ValidationError(
+                    "L'ecart max d'ajustement TTC doit etre entre 0 et 1.0 CHF."
                 )
 
     @api.constrains('alert_email')

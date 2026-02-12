@@ -944,6 +944,9 @@ class JsocrImportJob(models.Model):
         # Add invoice lines (Story 4.9)
         self._create_invoice_lines(invoice)
 
+        # Adjust TTC rounding on tax line if enabled
+        self._adjust_ttc_rounding(invoice)
+
         # Validate total after lines creation (HT/TTC validation)
         self._validate_invoice_total(invoice)
 
@@ -1366,6 +1369,77 @@ class JsocrImportJob(models.Model):
             )
 
         return (price_unit, was_adjusted)
+
+    def _adjust_ttc_rounding(self, invoice):
+        """Adjust the tax line to match the extracted TTC total.
+
+        When enabled in config, this corrects small rounding differences
+        (typically 1-3 cents) between Odoo's computed TTC and the extracted TTC.
+        The adjustment modifies the tax line balance and the payable line balance
+        so that invoice.amount_total matches extracted_amount_total exactly.
+
+        Args:
+            invoice: account.move record
+
+        Returns:
+            bool: True if adjustment was applied, False otherwise
+        """
+        self.ensure_one()
+
+        config = self.env['jsocr.config'].get_config()
+        if not config.adjust_ttc_rounding:
+            return False
+
+        if not self.extracted_amount_total:
+            return False
+
+        diff = self.extracted_amount_total - invoice.amount_total
+        if diff == 0:
+            return False
+
+        if abs(diff) > config.adjust_ttc_max_diff:
+            _logger.debug(
+                "JSOCR: Job %s TTC diff %.4f exceeds max %.2f, skipping adjustment",
+                self.id, diff, config.adjust_ttc_max_diff,
+            )
+            return False
+
+        # Find the tax line (display_type == 'tax'), pick the largest by abs(balance)
+        tax_lines = invoice.line_ids.filtered(lambda l: l.display_type == 'tax')
+        if not tax_lines:
+            _logger.debug("JSOCR: Job %s no tax line found for TTC adjustment", self.id)
+            return False
+
+        tax_line = max(tax_lines, key=lambda l: abs(l.balance))
+
+        # Find the payable line (display_type == 'payment_term')
+        payable_lines = invoice.line_ids.filtered(lambda l: l.display_type == 'payment_term')
+        if not payable_lines:
+            _logger.debug("JSOCR: Job %s no payable line found for TTC adjustment", self.id)
+            return False
+
+        payable_line = payable_lines[0]
+
+        # For in_invoice: tax line has positive balance (debit), payable has negative (credit)
+        # If diff > 0: we need to increase TTC -> increase tax debit + increase payable credit
+        # If diff < 0: we need to decrease TTC -> decrease tax debit + decrease payable credit
+        new_tax_balance = tax_line.balance + diff
+        new_payable_balance = payable_line.balance - diff
+
+        invoice.with_context(check_move_validity=False).write({
+            'line_ids': [
+                (1, tax_line.id, {'balance': new_tax_balance}),
+                (1, payable_line.id, {'balance': new_payable_balance}),
+            ],
+        })
+
+        invoice.jsocr_ttc_adjustment = diff
+
+        _logger.info(
+            "JSOCR: Job %s adjusted TTC rounding by %.4f (tax %s: %.2f -> %.2f)",
+            self.id, diff, tax_line.id, tax_line.balance, new_tax_balance,
+        )
+        return True
 
     def _validate_invoice_total(self, invoice):
         """Validate computed invoice total against extracted total.

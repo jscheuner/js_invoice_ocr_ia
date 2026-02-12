@@ -67,6 +67,12 @@
                         <field name="alert_email" widget="email"
                                help="Adresse email pour recevoir les alertes d'erreur (optionnel)"/>
                     </group>
+
+                    <group name="ttc_rounding" string="Ajustement Arrondi TTC">
+                        <field name="adjust_ttc_rounding"/>
+                        <field name="adjust_ttc_max_diff"
+                               invisible="not adjust_ttc_rounding"/>
+                    </group>
                 </sheet>
             </form>
         </field>
