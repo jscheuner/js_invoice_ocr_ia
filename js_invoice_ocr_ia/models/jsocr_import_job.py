@@ -988,6 +988,11 @@ class JsocrImportJob(models.Model):
         match_type = None
         if supplier_name:
             partner, match_type = ai_service.find_supplier(self.env, supplier_name)
+            # AI fallback: ask the AI to match against the known supplier list
+            if not partner:
+                partner = self._match_supplier_with_ai(supplier_name, ai_service)
+                if partner:
+                    match_type = 'ai'
             if partner:
                 self.partner_id = partner.id
 
@@ -1022,6 +1027,51 @@ class JsocrImportJob(models.Model):
 
         # QR-bill data overrides AI extraction (reliable structured source)
         self._apply_qr_overrides()
+
+    def _match_supplier_with_ai(self, supplier_name, ai_service):
+        """Ask the AI to match an extracted name against known suppliers.
+
+        Fallback when exact/partial/alias matching fails — handles writing
+        variants like "Sorein" vs "Sorein AG Reinigungsprodukte".
+        Non-blocking: returns False on any failure.
+
+        Args:
+            supplier_name (str): Supplier name extracted from the invoice
+            ai_service: AIServiceBase instance
+
+        Returns:
+            res.partner recordset or False
+        """
+        self.ensure_one()
+
+        try:
+            Partner = self.env['res.partner']
+            candidates = Partner.search([
+                ('is_company', '=', True),
+                ('supplier_rank', '>', 0),
+            ], limit=300)
+            if not candidates:
+                candidates = Partner.search([('is_company', '=', True)], limit=300)
+            if not candidates:
+                return False
+
+            match = ai_service.match_supplier_from_list(
+                supplier_name, candidates.mapped('name')
+            )
+            if match:
+                partner = candidates.filtered(lambda p: p.name == match)[:1]
+                if partner:
+                    _logger.info(
+                        "JSOCR: Job %s supplier matched by AI from known list", self.id
+                    )
+                    return partner
+            return False
+        except Exception as e:
+            _logger.warning(
+                "JSOCR: Job %s AI supplier matching failed (non-blocking): %s",
+                self.id, type(e).__name__
+            )
+            return False
 
     def _boost_supplier_confidence(self, supplier_name, match_type):
         """Recalculate supplier confidence based on Odoo partner resolution.
@@ -1244,12 +1294,10 @@ class JsocrImportJob(models.Model):
             except Exception as e:
                 _logger.warning("JSOCR: Job %s history retrieval failed: %s", self.id, e)
 
-        # Build line commands for invoice_line_ids (Odoo 18 ORM pattern)
-        line_commands = []
+        # Step 1: predict account per line (learned patterns, supplier history)
+        predictions = []
         for line in lines:
             description = line.get('description', 'Ligne facture')
-
-            # Predict account for this line (Story 4.17)
             try:
                 account_id, confidence, source = self._predict_line_account(
                     self.partner_id.id if self.partner_id else None,
@@ -1262,24 +1310,37 @@ class JsocrImportJob(models.Model):
                 account_id = fallback_account_id
                 confidence = 10
                 source = 'default'
+            predictions.append({
+                'description': description,
+                'account_id': account_id,
+                'confidence': confidence,
+                'source': source,
+            })
 
+        # Step 2: AI fallback — give the chart of accounts to the AI for
+        # lines that fell back to the default account (e.g. new supplier)
+        self._apply_ai_account_suggestions(predictions)
+
+        # Step 3: build line commands for invoice_line_ids (Odoo 18 ORM pattern)
+        line_commands = []
+        for line, pred in zip(lines, predictions):
             # Get original price
             original_price = line.get('unit_price', 0.0)
 
             # Get tax info for predicted account and adjust price if needed
-            tax_info = self._get_tax_for_account(account_id)
+            tax_info = self._get_tax_for_account(pred['account_id'])
             adjusted_price, was_adjusted = self._adjust_price_unit(
                 original_price, amounts_type, tax_info
             )
 
             line_vals = {
-                'name': description,
+                'name': pred['description'],
                 'quantity': line.get('quantity', 1.0),
                 'price_unit': adjusted_price,
-                'account_id': account_id,
-                'jsocr_account_confidence': confidence,
-                'jsocr_account_source': source,
-                'jsocr_predicted_account_id': account_id,
+                'account_id': pred['account_id'],
+                'jsocr_account_confidence': pred['confidence'],
+                'jsocr_account_source': pred['source'],
+                'jsocr_predicted_account_id': pred['account_id'],
             }
             line_commands.append((0, 0, line_vals))
 
@@ -1320,6 +1381,62 @@ class JsocrImportJob(models.Model):
         ], order='code', limit=1)
 
         return expense_account.id if expense_account else None
+
+    def _apply_ai_account_suggestions(self, predictions):
+        """Ask the AI to pick accounts for lines without pattern/history match.
+
+        Sends the full expense chart of accounts and the unresolved line
+        descriptions to the AI in a single call. Suggested accounts get
+        confidence 60 and source 'ai'. Non-blocking: any failure leaves
+        the default fallback predictions untouched.
+
+        Args:
+            predictions (list[dict]): Per-line predictions from step 1,
+                modified in place for lines the AI could map
+        """
+        self.ensure_one()
+
+        unresolved = [i for i, p in enumerate(predictions) if p['source'] == 'default']
+        if not unresolved:
+            return
+
+        try:
+            accounts = self.env['account.account'].search([
+                ('account_type', 'in', ('expense', 'expense_depreciation', 'expense_direct_cost')),
+                ('deprecated', '=', False),
+            ], order='code')
+            if not accounts:
+                return
+
+            config = self.env['jsocr.config'].get_config()
+            from odoo.addons.js_invoice_ocr_ia.services.ai_service_factory import AIServiceFactory
+            ai_service = AIServiceFactory.create(config)
+
+            descriptions = [predictions[i]['description'] for i in unresolved]
+            account_list = [{'code': a.code, 'name': a.name} for a in accounts]
+
+            mapping = ai_service.suggest_line_accounts(
+                descriptions, account_list, self.detected_language or 'fr'
+            )
+            if not mapping:
+                return
+
+            code_to_id = {a.code: a.id for a in accounts}
+            for local_index, code in mapping.items():
+                prediction = predictions[unresolved[local_index]]
+                prediction['account_id'] = code_to_id[code]
+                prediction['confidence'] = 60
+                prediction['source'] = 'ai'
+
+            _logger.info(
+                "JSOCR: Job %s AI suggested accounts for %d/%d unresolved line(s)",
+                self.id, len(mapping), len(unresolved)
+            )
+        except Exception as e:
+            _logger.warning(
+                "JSOCR: Job %s AI account suggestion failed (non-blocking): %s",
+                self.id, type(e).__name__
+            )
 
     # -------------------------------------------------------------------------
     # ACCOUNT PREDICTION METHODS (Story 4.16, 4.17)

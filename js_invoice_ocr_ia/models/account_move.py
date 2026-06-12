@@ -468,6 +468,7 @@ class AccountMove(models.Model):
                 move._learn_supplier_correction()
                 move._learn_charge_account_correction()
                 if move.partner_id:
+                    move._learn_supplier_iban()
                     move._learn_account_corrections()
                     move._trigger_mask_generation()
             except Exception as e:
@@ -512,6 +513,39 @@ class AccountMove(models.Model):
         _logger.info(
             "JSOCR: Learned supplier alias '%s' for partner %s",
             extracted_name[:30], self.partner_id.id
+        )
+
+    def _learn_supplier_iban(self):
+        """Store the QR-bill creditor IBAN on the supplier (learning).
+
+        When the user validates an OCR invoice whose QR-bill IBAN is not yet
+        known in Odoo, attach it to the supplier so future invoices from
+        this supplier are matched instantly and reliably by IBAN.
+        """
+        self.ensure_one()
+        job = self.jsocr_import_job_id
+        if not job or not job.qr_data or not self.partner_id:
+            return
+
+        try:
+            qr = json.loads(job.qr_data)
+        except (json.JSONDecodeError, TypeError):
+            return
+
+        iban = (qr.get('iban') or '').replace(' ', '').upper()
+        if not iban:
+            return
+
+        Bank = self.env['res.partner.bank'].sudo()
+        if Bank.search_count([('sanitized_acc_number', '=', iban)]):
+            return
+
+        Bank.create({
+            'acc_number': iban,
+            'partner_id': self.partner_id.id,
+        })
+        _logger.info(
+            "JSOCR: Learned QR-bill IBAN for partner %s", self.partner_id.id
         )
 
     def _learn_charge_account_correction(self):
@@ -661,12 +695,14 @@ class AccountMoveLine(models.Model):
         selection=[
             ('pattern', 'Learned Pattern'),
             ('history', 'Historical Analysis'),
+            ('ai', 'AI Suggestion'),
             ('default', 'Default Account'),
         ],
         string='Prediction Source',
         help='How the account was predicted: '
              'pattern = from learned patterns, '
              'history = from similar historical lines, '
+             'ai = suggested by the AI from the chart of accounts, '
              'default = fallback expense account',
     )
 

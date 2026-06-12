@@ -679,3 +679,138 @@ REPONDS UNIQUEMENT avec un objet JSON valide (sans texte avant ou apres):
             parsed_lines.append(parsed_line)
 
         return parsed_lines
+
+    # ------------------------------------------------------------------
+    # AI account suggestion
+    # ------------------------------------------------------------------
+
+    def suggest_line_accounts(self, line_descriptions, accounts, language='fr'):
+        """Ask the AI to pick the best expense account for each invoice line.
+
+        Used as a smart fallback when learned patterns and supplier history
+        yield no prediction (e.g. new supplier).
+
+        Args:
+            line_descriptions (list[str]): Invoice line descriptions
+            accounts (list[dict]): Available accounts [{'code', 'name'}, ...]
+            language (str): Document language ('fr', 'de', 'en')
+
+        Returns:
+            dict: {line_index: account_code} for lines the AI could map.
+                  Only codes present in the provided account list are returned.
+        """
+        if not line_descriptions or not accounts:
+            return {}
+
+        accounts_text = '\n'.join(
+            f"{a['code']}: {a['name']}" for a in accounts
+        )
+        lines_text = '\n'.join(
+            f"{i}: {desc}" for i, desc in enumerate(line_descriptions)
+        )
+
+        prompt = f"""Tu es un comptable suisse experimente. Pour chaque ligne de facture fournisseur ci-dessous, choisis le compte de charge le plus approprie dans le plan comptable fourni.
+
+PLAN COMPTABLE (code: libelle):
+{accounts_text}
+
+LIGNES DE FACTURE (index: description):
+{lines_text}
+
+INSTRUCTIONS:
+1. Utilise UNIQUEMENT des codes presents dans le plan comptable ci-dessus
+2. Choisis le compte le plus specifique qui correspond a la nature de la depense
+3. Si aucun compte ne convient clairement pour une ligne, omets cette ligne
+
+REPONDS UNIQUEMENT avec un objet JSON valide (sans texte avant ou apres):
+{{"mappings": [{{"line": 0, "account_code": "6000"}}]}}"""
+
+        try:
+            raw_response = self._call_api(prompt)
+        except AIServiceError as e:
+            _logger.warning("JSOCR: AI account suggestion failed: %s", type(e).__name__)
+            return {}
+
+        parsed = self._parse_ai_response(raw_response)
+        if not parsed or not isinstance(parsed.get('mappings'), list):
+            _logger.warning("JSOCR: AI account suggestion returned unparseable response")
+            return {}
+
+        valid_codes = {str(a['code']) for a in accounts}
+        result = {}
+        for mapping in parsed['mappings']:
+            if not isinstance(mapping, dict):
+                continue
+            try:
+                index = int(mapping.get('line'))
+            except (ValueError, TypeError):
+                continue
+            code = str(mapping.get('account_code', '')).strip()
+            if code in valid_codes and 0 <= index < len(line_descriptions):
+                result[index] = code
+
+        _logger.info(
+            "JSOCR: AI suggested accounts for %d/%d line(s)",
+            len(result), len(line_descriptions)
+        )
+        return result
+
+    # ------------------------------------------------------------------
+    # AI supplier matching
+    # ------------------------------------------------------------------
+
+    def match_supplier_from_list(self, supplier_name, candidate_names):
+        """Ask the AI which known supplier matches an extracted name.
+
+        Used as fallback when exact/partial/alias matching fails, e.g.
+        "Sorein" extracted vs "Sorein AG Reinigungsprodukte" in Odoo.
+
+        Args:
+            supplier_name (str): Supplier name extracted from the invoice
+            candidate_names (list[str]): Known supplier names from Odoo
+
+        Returns:
+            str or None: The matching candidate name (exactly as provided),
+                         or None if no reliable match
+        """
+        if not supplier_name or not candidate_names:
+            return None
+
+        candidates_text = '\n'.join(f"- {name}" for name in candidate_names)
+
+        prompt = f"""Voici un nom de fournisseur extrait d'une facture, et la liste des fournisseurs connus dans le systeme comptable.
+
+NOM EXTRAIT: {supplier_name}
+
+FOURNISSEURS CONNUS:
+{candidates_text}
+
+INSTRUCTIONS:
+1. Determine si le nom extrait correspond a l'un des fournisseurs connus
+   (variantes d'ecriture, forme juridique differente, abreviations)
+2. Ne reponds un nom QUE si la correspondance est quasi certaine
+3. Recopie le nom EXACTEMENT comme dans la liste
+4. En cas de doute, reponds null
+
+REPONDS UNIQUEMENT avec un objet JSON valide (sans texte avant ou apres):
+{{"match": "Nom exact de la liste ou null"}}"""
+
+        try:
+            raw_response = self._call_api(prompt)
+        except AIServiceError as e:
+            _logger.warning("JSOCR: AI supplier matching failed: %s", type(e).__name__)
+            return None
+
+        parsed = self._parse_ai_response(raw_response)
+        if not parsed:
+            return None
+
+        match = parsed.get('match')
+        if match and isinstance(match, str) and match.strip().lower() != 'null':
+            match = match.strip()
+            # Accept only names actually present in the candidate list
+            if match in candidate_names:
+                return match
+            _logger.warning("JSOCR: AI supplier match not in candidate list, ignored")
+
+        return None

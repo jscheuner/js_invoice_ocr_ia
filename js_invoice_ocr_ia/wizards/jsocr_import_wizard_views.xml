@@ -30,10 +30,13 @@
         <field name="target">new</field>
     </record>
 
-    <!-- Menu entry under Jobs d'import -->
+    <!-- Menu entry under Jobs d'import.
+         Sequence must be after "Tous les jobs" (10): the first child action
+         becomes the default action of the parent menus, and a wizard popup
+         must never be the landing action of the OCR IA menu. -->
     <menuitem id="menu_jsocr_import_wizard"
               name="Importer des PDFs"
               parent="menu_jsocr_jobs"
               action="jsocr_import_wizard_action"
-              sequence="1"/>
+              sequence="40"/>
 </odoo>
