@@ -133,3 +133,7 @@ addons/web_kanban
 *.tmp
 *.bak
 *.backup
+
+# Local screenshots
+*.PNG
+*.png
