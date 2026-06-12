@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Form view for manual PDF import wizard -->
+    <record id="jsocr_import_wizard_view_form" model="ir.ui.view">
+        <field name="name">jsocr.import.wizard.view.form</field>
+        <field name="model">jsocr.import.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Importer des factures PDF">
+                <group>
+                    <field name="attachment_ids" widget="many2many_binary"
+                           string="Fichiers PDF"
+                           options="{'accepted_file_extensions': '.pdf'}"/>
+                    <field name="process_immediately"/>
+                </group>
+                <footer>
+                    <button name="action_import" type="object" string="Importer"
+                            class="btn-primary" data-hotkey="q"/>
+                    <button string="Annuler" class="btn-secondary" special="cancel"
+                            data-hotkey="x"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action to open the wizard -->
+    <record id="jsocr_import_wizard_action" model="ir.actions.act_window">
+        <field name="name">Importer des PDFs</field>
+        <field name="res_model">jsocr.import.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Menu entry under Jobs d'import -->
+    <menuitem id="menu_jsocr_import_wizard"
+              name="Importer des PDFs"
+              parent="menu_jsocr_jobs"
+              action="jsocr_import_wizard_action"
+              sequence="1"/>
+</odoo>

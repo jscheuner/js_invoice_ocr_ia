@@ -12,3 +12,6 @@ Pillow>=10.0.0,<11.0.0
 
 # HTTP client for Ollama API
 requests>=2.31.0,<3.0.0
+
+# Swiss QR-bill decoding (QR code reader, self-contained wheels)
+zxing-cpp>=2.0.0,<3.0.0

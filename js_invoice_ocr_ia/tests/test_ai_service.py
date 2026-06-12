@@ -107,7 +107,7 @@ class TestOllamaService(TransactionCase):
 
         self.assertIn('francais', prompt.lower())
         self.assertIn('suisse', prompt.lower())
-        self.assertIn('7.7%', prompt)
+        self.assertIn('8.1%', prompt)
 
     def test_prompt_building_german(self):
         """Test prompt includes German context."""

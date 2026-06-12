@@ -4,6 +4,7 @@
 import base64
 import json
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -176,6 +177,33 @@ class JsocrImportJob(models.Model):
         digits='Account',
         copy=False,
         help='Total amount extracted by AI',
+    )
+
+    extracted_currency = fields.Char(
+        string='Extracted Currency',
+        copy=False,
+        help='Currency code (ISO 4217) extracted by AI or QR-bill (e.g. CHF, EUR)',
+    )
+
+    extracted_payment_reference = fields.Char(
+        string='Extracted Payment Reference',
+        copy=False,
+        help='Payment reference (QRR/SCOR or ISR) extracted by AI or QR-bill',
+    )
+
+    # Swiss QR-bill data (decoded from the QR code, 100% reliable when present)
+    qr_data = fields.Text(
+        string='QR-Bill Data (JSON)',
+        copy=False,
+        help='Structured data decoded from the Swiss QR code (IBAN, creditor, '
+             'amount, currency, reference, Swico billing info)',
+    )
+
+    qr_found = fields.Boolean(
+        string='QR-Bill Found',
+        default=False,
+        copy=False,
+        help='True if a Swiss QR code was found and decoded in the PDF',
     )
 
     # Retry management
@@ -561,6 +589,16 @@ class JsocrImportJob(models.Model):
             })
 
             _logger.info("JSOCR: Job %s text extraction complete (lang=%s)", self.id, detected_lang)
+
+            # Decode Swiss QR-bill if present (non-blocking)
+            try:
+                self._extract_qr_data()
+            except Exception as e:
+                _logger.warning(
+                    "JSOCR: Job %s QR extraction failed (non-blocking): %s",
+                    self.id, type(e).__name__
+                )
+
             return extracted_text
 
         except ValueError as e:
@@ -570,6 +608,168 @@ class JsocrImportJob(models.Model):
         except Exception as e:
             _logger.error("JSOCR: Job %s unexpected extraction error: %s", self.id, type(e).__name__)
             raise UserError(f"Unexpected error during text extraction: {type(e).__name__}") from e
+
+    # -------------------------------------------------------------------------
+    # SWISS QR-BILL METHODS
+    # -------------------------------------------------------------------------
+
+    def _extract_qr_data(self):
+        """Decode the Swiss QR-bill from the PDF and store it as JSON.
+
+        The Swiss QR code contains structured payment data (IBAN, creditor,
+        amount, currency, reference) that is 100% reliable when present.
+
+        Returns:
+            dict or None: Parsed QR data, or None if no QR found/decoder missing
+        """
+        self.ensure_one()
+
+        if not self.pdf_file:
+            return None
+
+        from odoo.addons.js_invoice_ocr_ia.services.qr_service import SwissQRService
+
+        service = SwissQRService()
+        if not service.is_available():
+            return None
+
+        pdf_binary = base64.b64decode(self.pdf_file)
+        qr = service.extract_qr_from_pdf(pdf_binary)
+
+        if qr:
+            self.write({
+                'qr_data': json.dumps(qr, ensure_ascii=False),
+                'qr_found': True,
+            })
+            _logger.info("JSOCR: Job %s Swiss QR-bill decoded", self.id)
+        return qr
+
+    def _apply_qr_overrides(self):
+        """Override AI-extracted fields with reliable QR-bill data.
+
+        Called at the end of _store_extracted_data. QR data takes precedence
+        over AI extraction for: total amount, currency, payment reference,
+        invoice number/date (Swico), and supplier resolution (IBAN, VAT, name).
+        Overridden fields get a confidence of 100.
+        """
+        self.ensure_one()
+
+        if not self.qr_data:
+            return
+
+        try:
+            qr = json.loads(self.qr_data)
+        except (json.JSONDecodeError, TypeError):
+            return
+
+        qr_confidences = {}
+
+        # Total amount and currency
+        if qr.get('amount'):
+            self.extracted_amount_total = qr['amount']
+            qr_confidences['amount_total'] = qr['amount']
+        if qr.get('currency'):
+            self.extracted_currency = qr['currency']
+
+        # Payment reference (QRR/SCOR)
+        if qr.get('reference'):
+            self.extracted_payment_reference = qr['reference']
+
+        # Swico billing information (invoice number, date)
+        swico = qr.get('swico') or {}
+        if swico.get('invoice_number'):
+            self.extracted_invoice_number = swico['invoice_number']
+            qr_confidences['invoice_number'] = swico['invoice_number']
+        if swico.get('invoice_date'):
+            try:
+                datetime.strptime(swico['invoice_date'], '%Y-%m-%d')
+                self.extracted_invoice_date = swico['invoice_date']
+                qr_confidences['date'] = swico['invoice_date']
+            except ValueError:
+                pass
+
+        # Supplier resolution from QR (IBAN > VAT > creditor name)
+        partner = self._find_partner_from_qr(qr)
+        if partner:
+            self.partner_id = partner.id
+            qr_confidences['supplier'] = partner.name
+            if qr.get('creditor', {}).get('name'):
+                self.extracted_supplier_name = qr['creditor']['name']
+
+        # Mark QR-sourced fields with 100% confidence
+        if qr_confidences:
+            try:
+                conf_data = json.loads(self.confidence_data or '{}')
+                if not isinstance(conf_data, dict):
+                    conf_data = {}
+            except (json.JSONDecodeError, TypeError):
+                conf_data = {}
+
+            for key, value in qr_confidences.items():
+                conf_data[key] = {'value': value, 'confidence': 100, 'source': 'qr'}
+
+            self.confidence_data = json.dumps(conf_data, ensure_ascii=False)
+
+        _logger.info(
+            "JSOCR: Job %s applied QR-bill overrides (%s)",
+            self.id, ', '.join(qr_confidences.keys()) or 'none',
+        )
+
+    def _find_partner_from_qr(self, qr):
+        """Resolve the supplier partner from QR-bill data.
+
+        Match priority:
+        1. Creditor IBAN against res.partner.bank (near-infallible)
+        2. Swico VAT/IDE number against partner.vat
+        3. Creditor name via the standard supplier matching (exact/alias)
+
+        Args:
+            qr (dict): Parsed QR-bill data
+
+        Returns:
+            res.partner recordset or False
+        """
+        self.ensure_one()
+
+        # 1. IBAN match
+        iban = (qr.get('iban') or '').replace(' ', '').upper()
+        if iban:
+            bank = self.env['res.partner.bank'].sudo().search([
+                ('sanitized_acc_number', '=', iban),
+            ], limit=1)
+            if bank and bank.partner_id:
+                _logger.info("JSOCR: Job %s supplier matched by QR IBAN", self.id)
+                return bank.partner_id
+
+        # 2. VAT/IDE number match (Swico tag 30, digits only e.g. 106017086)
+        vat_digits = re.sub(r'\D', '', (qr.get('swico') or {}).get('vat_number', ''))
+        if vat_digits:
+            candidates = self.env['res.partner'].search([
+                ('vat', '!=', False),
+                ('is_company', '=', True),
+            ])
+            for candidate in candidates:
+                if re.sub(r'\D', '', candidate.vat or '') == vat_digits:
+                    _logger.info("JSOCR: Job %s supplier matched by QR VAT number", self.id)
+                    return candidate
+
+        # 3. Creditor name match (exact or alias only — partial too risky here)
+        creditor_name = (qr.get('creditor') or {}).get('name', '').strip()
+        if creditor_name:
+            Partner = self.env['res.partner']
+            partner = Partner.search([
+                ('name', '=ilike', creditor_name),
+                ('is_company', '=', True),
+            ], limit=1)
+            if partner:
+                _logger.info("JSOCR: Job %s supplier matched by QR creditor name", self.id)
+                return partner
+            partner = Partner.find_by_alias(creditor_name)
+            if partner:
+                _logger.info("JSOCR: Job %s supplier matched by QR creditor alias", self.id)
+                return partner
+
+        return False
 
     # -------------------------------------------------------------------------
     # FILE MOVEMENT METHODS (Story 3.6, 3.7)
@@ -812,6 +1012,17 @@ class JsocrImportJob(models.Model):
         self.extracted_amount_tax = ai_service._parse_amount(data.get('amount_tax')) or 0.0
         self.extracted_amount_total = ai_service._parse_amount(data.get('amount_total')) or 0.0
 
+        # Currency and payment reference
+        currency = data.get('currency')
+        if currency and isinstance(currency, str):
+            self.extracted_currency = currency.strip().upper()
+        payment_ref = data.get('payment_reference')
+        if payment_ref and isinstance(payment_ref, str):
+            self.extracted_payment_reference = payment_ref.strip()
+
+        # QR-bill data overrides AI extraction (reliable structured source)
+        self._apply_qr_overrides()
+
     def _boost_supplier_confidence(self, supplier_name, match_type):
         """Recalculate supplier confidence based on Odoo partner resolution.
 
@@ -936,6 +1147,25 @@ class JsocrImportJob(models.Model):
         # Supplier reference (invoice number)
         if self.extracted_invoice_number:
             invoice_vals['ref'] = self.extracted_invoice_number
+
+        # Payment reference (QRR/SCOR from QR-bill or AI extraction)
+        if self.extracted_payment_reference:
+            invoice_vals['payment_reference'] = self.extracted_payment_reference
+
+        # Currency (only if different from company currency and known in Odoo)
+        if self.extracted_currency:
+            company_currency = self.env.company.currency_id
+            if self.extracted_currency != company_currency.name:
+                currency = self.env['res.currency'].search([
+                    ('name', '=', self.extracted_currency),
+                ], limit=1)
+                if currency:
+                    invoice_vals['currency_id'] = currency.id
+                else:
+                    _logger.warning(
+                        "JSOCR: Job %s extracted currency '%s' not found or inactive in Odoo",
+                        self.id, self.extracted_currency,
+                    )
 
         # Create invoice
         invoice = self.env['account.move'].create(invoice_vals)

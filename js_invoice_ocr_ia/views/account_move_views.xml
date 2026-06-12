@@ -44,9 +44,9 @@
                 <field name="jsocr_conf_supplier_badge" widget="badge" nolabel="1"
                        class="mt-1"
                        invisible="not jsocr_conf_supplier_badge"
-                       decoration-success="jsocr_conf_supplier &gt;= 95"
-                       decoration-warning="jsocr_conf_supplier &gt;= 90 and jsocr_conf_supplier &lt; 95"
-                       decoration-danger="jsocr_conf_supplier &lt; 90"/>
+                       decoration-success="jsocr_conf_supplier &gt;= 80"
+                       decoration-warning="jsocr_conf_supplier &gt;= 50 and jsocr_conf_supplier &lt; 80"
+                       decoration-danger="jsocr_conf_supplier &lt; 50"/>
             </xpath>
 
             <!-- Inline confidence badge next to invoice_date (purchase bill) -->
@@ -57,9 +57,9 @@
                            readonly="state != 'draft'"/>
                     <field name="jsocr_conf_date_badge" widget="badge" nolabel="1"
                            invisible="not jsocr_conf_date_badge"
-                           decoration-success="jsocr_conf_date &gt;= 95"
-                           decoration-warning="jsocr_conf_date &gt;= 90 and jsocr_conf_date &lt; 95"
-                           decoration-danger="jsocr_conf_date &lt; 90"/>
+                           decoration-success="jsocr_conf_date &gt;= 80"
+                           decoration-warning="jsocr_conf_date &gt;= 50 and jsocr_conf_date &lt; 80"
+                           decoration-danger="jsocr_conf_date &lt; 50"/>
                 </div>
             </xpath>
 
@@ -70,9 +70,9 @@
                            invisible="move_type not in ('in_invoice', 'in_receipt', 'in_refund')"/>
                     <field name="jsocr_conf_invoice_number_badge" widget="badge" nolabel="1"
                            invisible="not jsocr_conf_invoice_number_badge"
-                           decoration-success="jsocr_conf_invoice_number &gt;= 95"
-                           decoration-warning="jsocr_conf_invoice_number &gt;= 90 and jsocr_conf_invoice_number &lt; 95"
-                           decoration-danger="jsocr_conf_invoice_number &lt; 90"/>
+                           decoration-success="jsocr_conf_invoice_number &gt;= 80"
+                           decoration-warning="jsocr_conf_invoice_number &gt;= 50 and jsocr_conf_invoice_number &lt; 80"
+                           decoration-danger="jsocr_conf_invoice_number &lt; 50"/>
                 </div>
             </xpath>
 
@@ -83,21 +83,21 @@
                     <span class="text-muted">HT</span>
                     <field name="jsocr_conf_amount_untaxed_badge" widget="badge" nolabel="1"
                            invisible="not jsocr_conf_amount_untaxed_badge"
-                           decoration-success="jsocr_conf_amount_untaxed &gt;= 95"
-                           decoration-warning="jsocr_conf_amount_untaxed &gt;= 90 and jsocr_conf_amount_untaxed &lt; 95"
-                           decoration-danger="jsocr_conf_amount_untaxed &lt; 90"/>
+                           decoration-success="jsocr_conf_amount_untaxed &gt;= 80"
+                           decoration-warning="jsocr_conf_amount_untaxed &gt;= 50 and jsocr_conf_amount_untaxed &lt; 80"
+                           decoration-danger="jsocr_conf_amount_untaxed &lt; 50"/>
                     <span class="text-muted">TVA</span>
                     <field name="jsocr_conf_amount_tax_badge" widget="badge" nolabel="1"
                            invisible="not jsocr_conf_amount_tax_badge"
-                           decoration-success="jsocr_conf_amount_tax &gt;= 95"
-                           decoration-warning="jsocr_conf_amount_tax &gt;= 90 and jsocr_conf_amount_tax &lt; 95"
-                           decoration-danger="jsocr_conf_amount_tax &lt; 90"/>
+                           decoration-success="jsocr_conf_amount_tax &gt;= 80"
+                           decoration-warning="jsocr_conf_amount_tax &gt;= 50 and jsocr_conf_amount_tax &lt; 80"
+                           decoration-danger="jsocr_conf_amount_tax &lt; 50"/>
                     <span class="text-muted">TTC</span>
                     <field name="jsocr_conf_amount_total_badge" widget="badge" nolabel="1"
                            invisible="not jsocr_conf_amount_total_badge"
-                           decoration-success="jsocr_conf_amount_total &gt;= 95"
-                           decoration-warning="jsocr_conf_amount_total &gt;= 90 and jsocr_conf_amount_total &lt; 95"
-                           decoration-danger="jsocr_conf_amount_total &lt; 90"/>
+                           decoration-success="jsocr_conf_amount_total &gt;= 80"
+                           decoration-warning="jsocr_conf_amount_total &gt;= 50 and jsocr_conf_amount_total &lt; 80"
+                           decoration-danger="jsocr_conf_amount_total &lt; 50"/>
                 </div>
             </xpath>
 

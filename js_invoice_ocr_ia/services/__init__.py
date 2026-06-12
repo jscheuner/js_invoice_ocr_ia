@@ -3,6 +3,7 @@
 
 # Services will be imported here as they are created
 from . import ocr_service
+from . import qr_service
 from . import ai_service_base
 from . import ai_service_ollama
 from . import ai_service_claude

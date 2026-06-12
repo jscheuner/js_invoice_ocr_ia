@@ -52,6 +52,9 @@ Support natif francais, allemand et anglais (contexte suisse).
         'views/account_move_views.xml',
         'views/menu.xml',
 
+        # Wizards
+        'wizards/jsocr_import_wizard_views.xml',
+
         # Data (Story 3.4+)
         'data/jsocr_cron.xml',
     ],

@@ -14,3 +14,4 @@ access_jsocr_correction_admin,jsocr.correction.admin,model_jsocr_correction,grou
 access_jsocr_account_pattern_user,jsocr.account.pattern.user,model_jsocr_account_pattern,group_jsocr_user,1,0,0,0
 access_jsocr_account_pattern_manager,jsocr.account.pattern.manager,model_jsocr_account_pattern,group_jsocr_manager,1,1,1,1
 access_jsocr_account_pattern_admin,jsocr.account.pattern.admin,model_jsocr_account_pattern,group_jsocr_admin,1,1,1,1
+access_jsocr_import_wizard_user,jsocr.import.wizard.user,model_jsocr_import_wizard,group_jsocr_user,1,1,1,1

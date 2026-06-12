@@ -51,8 +51,10 @@ class AIServiceBase(abc.ABC):
 
     provider_name = 'base'
 
-    # Swiss VAT rates for validation
-    SWISS_VAT_RATES = [7.7, 2.5, 0.0]
+    # Swiss VAT rates for validation (rates in force since 2024-01-01)
+    SWISS_VAT_RATES = [8.1, 2.6, 3.8, 0.0]
+    # Old rates kept for invoices dated before 2024
+    SWISS_VAT_RATES_LEGACY = [7.7, 2.5, 3.7, 0.0]
 
     # Date format patterns for parsing
     DATE_PATTERNS = [
@@ -246,7 +248,7 @@ Analyse le texte de facture suivant et extrait les informations dans un format J
 
 CONTEXTE:
 - Document en {lang_context}
-- Contexte suisse: TVA possible a 7.7%, 2.5%, ou 0%
+- Contexte suisse: TVA possible a 8.1%, 2.6%, 3.8% ou 0% (factures avant 2024: 7.7%, 2.5%, 3.7%)
 - Les montants peuvent utiliser la virgule ou le point comme separateur decimal
 - L'apostrophe peut etre utilisee comme separateur de milliers (ex: 1'250.00)
 
@@ -276,8 +278,8 @@ REPONDS UNIQUEMENT avec un objet JSON valide (sans texte avant ou apres):
         }}
     ],
     "amount_untaxed": 100.00,
-    "amount_tax": 7.70,
-    "amount_total": 107.70,
+    "amount_tax": 8.10,
+    "amount_total": 108.10,
     "currency": "CHF",
     "payment_reference": "Reference de paiement ou null"
 }}"""

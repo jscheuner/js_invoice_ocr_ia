@@ -5,12 +5,14 @@ Addon Odoo 18 Community pour automatiser la saisie des factures fournisseurs via
 ## Fonctionnalités
 
 - **Surveillance automatique** : Détection des nouveaux PDFs dans un dossier configuré
+- **Import manuel** : Upload multi-PDF directement dans Odoo (menu OCR IA > Jobs d'import > Importer des PDFs) avec traitement immédiat
+- **QR-facture suisse** : Décodage du Swiss QR Code (IBAN, montant, devise, référence QRR/SCOR, données Swico) — données fiables à 100% qui priment sur l'extraction IA
 - **Extraction OCR** : Support PDF natifs (texte sélectionnable) et scannés (Tesseract)
-- **Analyse IA** : Extraction structurée via Ollama local (Llama3, Mistral)
-- **Création automatique** : Factures fournisseur brouillon pré-remplies
-- **Indices de confiance** : Indicateurs visuels par champ (vert/orange/rouge)
+- **Analyse IA** : Extraction structurée via Ollama local (Llama3, Mistral) ou Claude (Anthropic)
+- **Création automatique** : Factures fournisseur brouillon pré-remplies (avec référence de paiement et devise)
+- **Indices de confiance** : Indicateurs visuels par champ (vert ≥80 / orange 50-79 / rouge <50)
 - **Apprentissage** : Mémorisation des corrections pour amélioration continue
-- **Multilingue** : Support natif FR/DE/EN (contexte suisse)
+- **Multilingue** : Support natif FR/DE/EN (contexte suisse, TVA 8.1%/2.6%/3.8%)
 
 ## Prérequis
 
@@ -33,6 +35,17 @@ sudo apt install tesseract-ocr tesseract-ocr-fra tesseract-ocr-deu tesseract-ocr
 ### Installation Tesseract (Windows)
 
 Télécharger depuis : https://github.com/UB-Mannheim/tesseract/wiki
+
+### Décodage QR-facture (recommandé)
+
+Le décodage du Swiss QR Code nécessite la librairie `zxing-cpp` (wheels
+auto-suffisants, aucune dépendance système) :
+
+```bash
+pip install zxing-cpp
+```
+
+Sans cette librairie, le module fonctionne mais s'appuie uniquement sur l'IA.
 
 ### Installation Ollama
 
@@ -121,8 +134,19 @@ Assigner les groupes aux utilisateurs :
 
 ## Utilisation
 
+**Option A — Import direct (recommandé) :**
+
+1. Menu **OCR IA > Jobs d'import > Importer des PDFs**
+2. Sélectionner un ou plusieurs PDFs, cliquer **Importer**
+3. Le traitement démarre immédiatement
+
+**Option B — Dossier surveillé :**
+
 1. **Déposer** les PDFs de factures dans le dossier surveillé
-2. **Attendre** le traitement automatique (cron toutes les 5 minutes)
+2. **Attendre** le scan automatique (cron toutes les 5 minutes, traitement immédiat après le scan)
+
+**Puis dans les deux cas :**
+
 3. **Recevoir** la notification "X factures prêtes à valider"
 4. **Valider** les factures brouillon dans Odoo
 5. **Corriger** si nécessaire (le système apprend)

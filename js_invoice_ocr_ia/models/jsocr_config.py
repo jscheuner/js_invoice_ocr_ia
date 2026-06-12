@@ -52,7 +52,7 @@ class JsocrConfig(models.Model):
 
     # AI Provider selection (Epic 7)
     ai_provider = fields.Selection(
-        [('ollama', 'Ollama (Local)'), ('claude', 'Claude (Anthropic)'), ('openai', 'OpenAI')],
+        [('ollama', 'Ollama (Local)'), ('claude', 'Claude (Anthropic)')],
         string='AI Provider',
         default='ollama',
         required=True,
@@ -71,7 +71,7 @@ class JsocrConfig(models.Model):
     ai_api_key = fields.Char(
         string='API Key',
         groups='base.group_system',
-        help='Cle API pour les providers cloud (Claude, OpenAI).',
+        help='Cle API pour les providers cloud (Claude).',
     )
 
     # Chemins des dossiers de traitement
@@ -422,6 +422,16 @@ class JsocrConfig(models.Model):
                     )
 
         _logger.info("JSOCR: Scan complete - %d job(s) created, %d file(s) rejected", jobs_created, rejected_count)
+
+        # Trigger job processing immediately instead of waiting for next cron run
+        if jobs_created:
+            cron = self.env.ref(
+                'js_invoice_ocr_ia.ir_cron_jsocr_process_jobs',
+                raise_if_not_found=False,
+            )
+            if cron:
+                cron.sudo()._trigger()
+
         return jobs_created
 
     def _process_pdf_file(self, pdf_path):

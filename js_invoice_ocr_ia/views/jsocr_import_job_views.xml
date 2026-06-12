@@ -20,6 +20,7 @@
                        decoration-info="state=='pending'"
                        decoration-muted="state=='draft'"/>
                 <field name="detected_language"/>
+                <field name="qr_found" string="QR" optional="show"/>
                 <field name="retry_count" string="Retries"/>
                 <field name="invoice_id" string="Facture"/>
                 <field name="create_date"/>
@@ -161,12 +162,22 @@
                             <field name="extracted_amount_untaxed" readonly="1" widget="monetary"/>
                             <field name="extracted_amount_tax" readonly="1" widget="monetary"/>
                             <field name="extracted_amount_total" readonly="1" widget="monetary"/>
+                            <field name="extracted_currency" readonly="1"/>
+                            <field name="extracted_payment_reference" readonly="1"/>
+                            <field name="qr_found" readonly="1" string="QR-facture detectee"/>
                         </group>
                     </group>
 
                     <notebook>
+                        <page string="Document PDF" name="pdf_preview">
+                            <field name="pdf_file" widget="pdf_viewer" readonly="1"
+                                   filename="pdf_filename"/>
+                        </page>
                         <page string="Texte extrait" name="extracted_text">
                             <field name="extracted_text" readonly="1"/>
+                        </page>
+                        <page string="QR-facture" name="qr_data" invisible="not qr_found">
+                            <field name="qr_data" readonly="1" widget="text"/>
                         </page>
                         <page string="Lignes extraites" name="extracted_lines" invisible="not extracted_lines">
                             <field name="extracted_lines" readonly="1" widget="text"/>
