@@ -134,6 +134,6 @@ addons/web_kanban
 *.bak
 *.backup
 
-# Local screenshots
-*.PNG
-*.png
+# Local screenshots (root only)
+/*.PNG
+/*.png
