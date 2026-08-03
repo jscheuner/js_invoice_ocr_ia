@@ -131,7 +131,6 @@ class ClaudeService(AIServiceBase):
         payload = {
             'model': self.model,
             'max_tokens': DEFAULT_MAX_TOKENS,
-            'temperature': 0.1,
             'messages': [
                 {'role': 'user', 'content': prompt},
             ],
