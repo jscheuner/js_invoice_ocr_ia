@@ -2185,34 +2185,42 @@ class JsocrImportJob(models.Model):
     # -------------------------------------------------------------------------
 
     @api.model
+    @api.model
     def cron_process_pending_jobs(self):
-        """Cron method to process pending jobs.
-
-        Called by ir.cron to process jobs that are in 'pending' state.
-        Processes jobs one by one to respect NFR10 (one failure doesn't block others).
-
-        Returns:
-            int: Number of jobs processed
-        """
-        pending_jobs = self.search([('state', '=', 'pending')], limit=10)
-
+        """Cron method to process pending jobs."""
+        BATCH_SIZE = 3  # ajuste selon la RAM dispo
+    
+        pending_jobs = self.search([('state', '=', 'pending')], limit=BATCH_SIZE)
+    
         if not pending_jobs:
             return 0
-
+    
         _logger.info("JSOCR: Cron found %d pending job(s) to process", len(pending_jobs))
-
+    
         processed = 0
         for job in pending_jobs:
             try:
                 job._process_job_async()
                 processed += 1
+                self.env.cr.commit()  # libère la transaction après chaque facture
             except Exception as e:
                 _logger.error(
                     "JSOCR: Cron failed to process job %s: %s",
                     job.id, type(e).__name__
                 )
-                # Continue with next job (NFR10)
+                self.env.cr.rollback()
                 continue
-
+    
+            # Libère le cache ORM accumulé (PDF, texte OCR, réponses IA en mémoire)
+            self.env.invalidate_all()
+    
         _logger.info("JSOCR: Cron processed %d job(s)", processed)
+    
+        # S'il reste des jobs en attente, redéclenche immédiatement pour vider
+        # le backlog par petits paquets plutôt que d'attendre le prochain intervalle
+        if self.search_count([('state', '=', 'pending')]) > 0:
+            cron = self.env.ref('js_invoice_ocr_ia.ir_cron_process_pending_jobs', raise_if_not_found=False)
+            if cron:
+                cron._trigger()
+    
         return processed
